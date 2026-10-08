@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "servers": [
+    {
+      "id": "58C79947-6D5B-4515-8B76-1729C2D30A61",
+      "enabled": false,
+      "name": "Test SSH",
+      "protocol": "SSH",
+      "host": "",
+      "port": 22,
+      "username": "",
+      "password": "",
+      "expectedFingerprint": ""
+    },
+    {
+      "id": "A92F52E2-3EC6-4B91-AD2A-78B07DF02DD0",
+      "enabled": false,
+      "name": "Test RDP",
+      "protocol": "RDP",
+      "host": "",
+      "port": 3389,
+      "username": "",
+      "domain": "",
+      "password": "",
+      "expectedFingerprint": ""
+    }
+  ]
+}

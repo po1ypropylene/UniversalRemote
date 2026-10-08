@@ -1,0 +1,376 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 110;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* SwiftTerm */ = {isa = PBXBuildFile; productRef = A10000000000000000000002; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A10000000000000000000005 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
+		D0BBCE2330767B8800D5AE23 /* Universal Remote.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Universal Remote.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		D0BBCE2530767B8800D5AE23 /* UniversalRemote */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = UniversalRemote;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D0BBCE2030767B8800D5AE23 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				A10000000000000000000001 /* SwiftTerm */,
+			);
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D0BBCE1A30767B8800D5AE23 = {
+			isa = PBXGroup;
+			children = (
+				D0BBCE2530767B8800D5AE23 /* UniversalRemote */,
+				A10000000000000000000005 /* Version.xcconfig */,
+				D0BBCE2430767B8800D5AE23 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D0BBCE2430767B8800D5AE23 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D0BBCE2330767B8800D5AE23 /* Universal Remote.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D0BBCE2230767B8800D5AE23 /* UniversalRemote */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D0BBCE2E30767B8900D5AE23 /* Build configuration list for PBXNativeTarget "UniversalRemote" */;
+			buildPhases = (
+				D0BBCE1F30767B8800D5AE23 /* Sources */,
+				D0BBCE2030767B8800D5AE23 /* Frameworks */,
+				D0BBCE2130767B8800D5AE23 /* Resources */,
+				A10000000000000000000004 /* Bundle Native Libraries */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				D0BBCE2530767B8800D5AE23 /* UniversalRemote */,
+			);
+			name = UniversalRemote;
+			packageProductDependencies = ( A10000000000000000000002 /* SwiftTerm */, );
+			productName = UniversalRemote;
+			productReference = D0BBCE2330767B8800D5AE23 /* Universal Remote.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D0BBCE1B30767B8800D5AE23 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					D0BBCE2230767B8800D5AE23 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+				};
+			};
+			buildConfigurationList = D0BBCE1E30767B8800D5AE23 /* Build configuration list for PBXProject "UniversalRemote" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D0BBCE1A30767B8800D5AE23;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D0BBCE2430767B8800D5AE23 /* Products */;
+			packageReferences = ( A10000000000000000000003 /* SwiftTerm */, );
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D0BBCE2230767B8800D5AE23 /* UniversalRemote */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D0BBCE2130767B8800D5AE23 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D0BBCE1F30767B8800D5AE23 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+        A10000000000000000000003 /* SwiftTerm */ = {isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/migueldeicaza/SwiftTerm"; requirement = {kind = exactVersion; version = 1.20.0; }; };
+/* End XCRemoteSwiftPackageReference section */
+/* Begin XCSwiftPackageProductDependency section */
+        A10000000000000000000002 /* SwiftTerm */ = {isa = XCSwiftPackageProductDependency; package = A10000000000000000000003; productName = SwiftTerm; };
+/* End XCSwiftPackageProductDependency section */
+/* Begin PBXShellScriptBuildPhase section */
+        A10000000000000000000004 /* Bundle Native Libraries */ = {
+            isa = PBXShellScriptBuildPhase;
+            alwaysOutOfDate = 1;
+            buildActionMask = 2147483647;
+            files = ();
+            inputPaths = ();
+            outputPaths = ();
+            name = "Bundle Native Libraries";
+            runOnlyForDeploymentPostprocessing = 0;
+            shellPath = /bin/sh;
+            shellScript = "python3 \"$SRCROOT/scripts/bundle-libraries.py\" \"$TARGET_BUILD_DIR/$WRAPPER_NAME\" \"$SRCROOT/Vendor/Native\" \"${EXPANDED_CODE_SIGN_IDENTITY:--}\"\n";
+        };
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		D0BBCE2C30767B8900D5AE23 /* Debug configuration for PBXProject "UniversalRemote" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = EHKBVESDE4;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+                ARCHS = arm64;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		D0BBCE2D30767B8900D5AE23 /* Release configuration for PBXProject "UniversalRemote" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = EHKBVESDE4;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+                ARCHS = arm64;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		D0BBCE2F30767B8900D5AE23 /* Debug configuration for PBXNativeTarget "UniversalRemote" */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000000000000000000005 /* Version.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = EHKBVESDE4;
+				ENABLE_APP_SANDBOX = YES;
+                ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+                SWIFT_OBJC_BRIDGING_HEADER = "UniversalRemote/Native-Bridge.h";
+                HEADER_SEARCH_PATHS = ("$(inherited)", "$(SRCROOT)/Vendor/Native/include", "$(SRCROOT)/Vendor/Native/include/freerdp3", "$(SRCROOT)/Vendor/Native/include/winpr3");
+                LIBRARY_SEARCH_PATHS = ("$(inherited)", "$(SRCROOT)/Vendor/Native/lib");
+                OTHER_LDFLAGS = ("$(inherited)", "-lssh2", "-lfreerdp3", "-lfreerdp-client3", "-lwinpr3", "-lcrypto");
+                INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Universal Remote connects to your local servers using SSH and Remote Desktop.";
+                INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.peterpo.UniversalRemote;
+				PRODUCT_NAME = "Universal Remote";
+                SWIFT_MODULE_NAME = UniversalRemote;
+                INFOPLIST_KEY_CFBundleDisplayName = "Universal Remote";
+                INFOPLIST_KEY_CFBundleName = "Universal Remote";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		D0BBCE3030767B8900D5AE23 /* Release configuration for PBXNativeTarget "UniversalRemote" */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000000000000000000005 /* Version.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = EHKBVESDE4;
+				ENABLE_APP_SANDBOX = YES;
+                ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+                SWIFT_OBJC_BRIDGING_HEADER = "UniversalRemote/Native-Bridge.h";
+                HEADER_SEARCH_PATHS = ("$(inherited)", "$(SRCROOT)/Vendor/Native/include", "$(SRCROOT)/Vendor/Native/include/freerdp3", "$(SRCROOT)/Vendor/Native/include/winpr3");
+                LIBRARY_SEARCH_PATHS = ("$(inherited)", "$(SRCROOT)/Vendor/Native/lib");
+                OTHER_LDFLAGS = ("$(inherited)", "-lssh2", "-lfreerdp3", "-lfreerdp-client3", "-lwinpr3", "-lcrypto");
+                INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Universal Remote connects to your local servers using SSH and Remote Desktop.";
+                INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.peterpo.UniversalRemote;
+				PRODUCT_NAME = "Universal Remote";
+                SWIFT_MODULE_NAME = UniversalRemote;
+                INFOPLIST_KEY_CFBundleDisplayName = "Universal Remote";
+                INFOPLIST_KEY_CFBundleName = "Universal Remote";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		D0BBCE1E30767B8800D5AE23 /* Build configuration list for PBXProject "UniversalRemote" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D0BBCE2C30767B8900D5AE23 /* Debug configuration for PBXProject "UniversalRemote" */,
+				D0BBCE2D30767B8900D5AE23 /* Release configuration for PBXProject "UniversalRemote" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		D0BBCE2E30767B8900D5AE23 /* Build configuration list for PBXNativeTarget "UniversalRemote" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D0BBCE2F30767B8900D5AE23 /* Debug configuration for PBXNativeTarget "UniversalRemote" */,
+				D0BBCE3030767B8900D5AE23 /* Release configuration for PBXNativeTarget "UniversalRemote" */,
+			);
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D0BBCE1B30767B8800D5AE23 /* Project object */;
+	validationLevel = 1;
+}

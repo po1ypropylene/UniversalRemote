@@ -1,0 +1,219 @@
+import AppKit
+import Combine
+import Foundation
+import SwiftTerm
+
+@MainActor final class RemoteSession: ObservableObject, Identifiable {
+    let id = UUID()
+    let profile: ConnectionDraft
+    let persistent: Bool
+    @Published var state = SessionState.waiting
+    @Published var message = "Waiting for credentials"
+    @Published var remoteTitle = ""
+    @Published var logs: [SessionLog] = []
+    let terminal: TerminalController?
+    let desktop: RDPDesktopView?
+    private var ssh: URSSHClient?
+    private var rdp: URRDPClient?
+    private var pendingWaiters: [PromptWaiter] = []
+    private var generation = UUID()
+    private var clipboardTimer: Timer?
+    private var clipboardChange = -1
+    var isSelected = false
+    weak var workspace: Workspace?
+
+    init(profile: ConnectionDraft, workspace: Workspace, persistent: Bool = true) {
+        self.profile = profile
+        self.workspace = workspace
+        self.persistent = persistent
+        if profile.kind == .ssh {
+            terminal = TerminalController(profile: profile)
+            desktop = nil
+        } else {
+            terminal = nil
+            desktop = RDPDesktopView(frame: NSRect(x: 0, y: 0, width: 1000, height: 700))
+        }
+    }
+    func start(credential: ConnectionCredential) {
+        generation = UUID()
+        let attempt = generation
+        state = .connecting
+        message = "Connecting…"
+        if let terminal {
+            let client = URSSHClient()
+            ssh = client
+            terminal.sendBytes = { [weak client] in client?.send($0) }
+            terminal.resize = { [weak client] cols, rows in client?.resizeColumns(cols, rows: rows) }
+            terminal.updateTitle = { [weak self] title in self?.remoteTitle = title }
+            client.onStatus = { [weak self] status, message in
+                DispatchQueue.main.async { self?.update(status, message: message, attempt: attempt) }
+            }
+            client.onData = { [weak self] data in
+                DispatchQueue.main.sync {
+                    guard let self, self.generation == attempt else { return }
+                    self.terminal?.view.feed(byteArray: Array(data)[...])
+                }
+            }
+            client.onTrust = trustCallback(attempt: attempt)
+            client.onPrompt = { [weak self] prompt, echo in
+                let waiter = PromptWaiter()
+                DispatchQueue.main.async {
+                    guard let self, self.generation == attempt, self.state.active else {
+                        waiter.resolve(nil)
+                        return
+                    }
+                    self.pendingWaiters.append(waiter)
+                    self.workspace?.enqueue(
+                        SessionPrompt(
+                            sessionID: self.id, kind: .interactive, title: "SSH authentication", details: prompt,
+                            echo: echo, waiter: waiter))
+                }
+                return waiter.wait()
+            }
+            client.connectHost(
+                profile.host, port: profile.port, username: profile.username, password: credential.password,
+                privateKey: credential.privateKey, authentication: profile.authentication.rawValue)
+        } else if let desktop {
+            let client = URRDPClient()
+            rdp = client
+            client.onStatus = { [weak self] status, message in
+                DispatchQueue.main.async { self?.update(status, message: message, attempt: attempt) }
+            }
+            client.onTrust = trustCallback(attempt: attempt)
+            client.onFrame = { [weak desktop] data, width, height, stride in
+                desktop?.submit(data, width: width, height: height, stride: stride)
+            }
+            client.onCursor = { [weak desktop] data, width, height, x, y in
+                DispatchQueue.main.async {
+                    desktop?.setRemoteCursor(data, width: width, height: height, hotX: x, hotY: y)
+                }
+            }
+            client.onClipboard = { [weak self] text in
+                DispatchQueue.main.async {
+                    guard let self, self.generation == attempt, self.state == .connected, self.profile.clipboard,
+                        self.isSelected
+                    else { return }
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                    self.clipboardChange = NSPasteboard.general.changeCount
+                }
+            }
+            desktop.sendKey = { [weak client] code, down, extended in
+                client?.sendScanCode(code, pressed: down, extended: extended)
+            }
+            desktop.sendUnicode = { [weak client] code, down in client?.sendUnicode(code, pressed: down) }
+            desktop.sendPointer = { [weak client] flags, x, y in client?.sendPointerFlags(flags, x: x, y: y) }
+            desktop.resizeRemote = { [weak self, weak client] width, height, scale in
+                guard let self, self.profile.dynamicResolution else { return }
+                client?.resizeWidth(width, height: height, scale: scale)
+            }
+            client.connectHost(
+                profile.host, port: profile.port, username: profile.username, domain: profile.domain,
+                password: credential.password, width: profile.desktopWidth, height: profile.desktopHeight, scale: 100,
+                clipboard: profile.clipboard)
+        }
+    }
+    private func trustCallback(attempt: UUID) -> (String, String) -> Bool {
+        { [weak self] fingerprint, details in
+            let waiter = PromptWaiter()
+            DispatchQueue.main.async {
+                guard let self, self.generation == attempt, self.state.active, let workspace = self.workspace else {
+                    waiter.resolve(nil)
+                    return
+                }
+                let previous = workspace.trust.fingerprint(for: self.profile.endpointKey)
+                if previous == fingerprint {
+                    waiter.resolve("trusted")
+                    return
+                }
+                self.pendingWaiters.append(waiter)
+                workspace.enqueue(
+                    SessionPrompt(
+                        sessionID: self.id, kind: .trust,
+                        title: previous == nil ? "Verify server identity" : "Server identity has changed",
+                        details: details, fingerprint: fingerprint, previousFingerprint: previous, waiter: waiter))
+            }
+            return waiter.wait() == "trusted"
+        }
+    }
+    private func update(_ status: String, message: String, attempt: UUID) {
+        guard generation == attempt else { return }
+        state = SessionState(rawValue: status) ?? .failed
+        self.message = message
+        logs.append(SessionLog(message: message))
+        if logs.count > 200 { logs.removeFirst(logs.count - 200) }
+        if state == .connected {
+            desktop?.inputEnabled = true
+            desktop?.requestResize()
+            startClipboardTimer()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                guard let self, self.isSelected else { return }
+                self.focus()
+            }
+        }
+        if !state.active {
+            cancelPrompts()
+            stopClipboard()
+            desktop?.releaseInput()
+            desktop?.inputEnabled = false
+        }
+    }
+    func askForCredentials() {
+        let waiter = PromptWaiter()
+        pendingWaiters.append(waiter)
+        workspace?.enqueue(
+            SessionPrompt(
+                sessionID: id, kind: .credentials, title: "Connect to \(profile.name)",
+                details: "\(profile.username)@\(profile.host):\(profile.port)", waiter: waiter))
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = waiter.wait()
+            DispatchQueue.main.async {
+                guard let self, self.state == .waiting else { return }
+                guard let result, let data = result.data(using: .utf8),
+                    let credential = try? JSONDecoder().decode(ConnectionCredential.self, from: data)
+                else {
+                    self.disconnect()
+                    return
+                }
+                self.start(credential: credential)
+            }
+        }
+    }
+    func disconnect() {
+        cancelPrompts()
+        stopClipboard()
+        desktop?.releaseInput()
+        desktop?.inputEnabled = false
+        ssh?.disconnect()
+        rdp?.disconnect()
+        generation = UUID()
+        state = .disconnected
+        message = "Disconnected"
+        logs.append(SessionLog(message: message))
+    }
+    private func cancelPrompts() {
+        pendingWaiters.forEach { $0.resolve(nil) }
+        pendingWaiters.removeAll()
+        workspace?.cancelPrompts(sessionID: id)
+    }
+    private func startClipboardTimer() {
+        guard profile.kind == .rdp, profile.clipboard else { return }
+        stopClipboard()
+        clipboardChange = -1
+        clipboardTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.isSelected, self.state == .connected else { return }
+                let pasteboard = NSPasteboard.general
+                guard pasteboard.changeCount != self.clipboardChange else { return }
+                self.clipboardChange = pasteboard.changeCount
+                self.rdp?.setClipboardText(pasteboard.string(forType: .string) ?? "")
+            }
+        }
+    }
+    private func stopClipboard() {
+        clipboardTimer?.invalidate()
+        clipboardTimer = nil
+    }
+    func controlAltDelete() { if state == .connected { rdp?.sendControlAltDelete() } }
+    func focus() { if let view = terminal?.view ?? desktop { view.window?.makeFirstResponder(view) } }
+}

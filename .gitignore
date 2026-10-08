@@ -1,0 +1,45 @@
+# Generated dependencies, binaries, synthetic fixture secrets and diagnostics
+.build/
+Vendor/Native/
+DerivedData/
+build/
+*.log
+*.dSYM/
+*.xcarchive/
+
+# Local real-server credentials: never commit this directory
+.local-testing/
+.env
+.env.*
+!.env.example
+
+# Private keys, certificates, signing material, local databases
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.crt
+*.der
+*.p7b
+*.p7c
+*.csr
+*.jks
+*.keystore
+*.keychain
+*.keychain-db
+*.mobileprovision
+*.provisionprofile
+id_rsa*
+id_ed25519*
+id_ecdsa*
+*.store
+*.store-shm
+*.store-wal
+
+# User-specific IDE and operating-system state
+*.xcuserstate
+xcuserdata/
+.DS_Store
+__pycache__/
+*.pyc
