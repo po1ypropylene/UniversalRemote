@@ -18,6 +18,7 @@ struct ConnectionDraft: Identifiable {
     var desktopHeight = 900
     var dynamicResolution = true
     var clipboard = false
+    var audioPlayback = true
     init() {}
     init(_ saved: SavedConnection) {
         id = saved.id
@@ -37,12 +38,16 @@ struct ConnectionDraft: Identifiable {
         desktopHeight = saved.desktopHeight
         dynamicResolution = saved.dynamicResolution
         clipboard = saved.clipboard
+        audioPlayback = saved.audioPlayback
     }
     var validationMessage: String? {
         let cleanHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
         if cleanHost.isEmpty { return "Enter a host name or IP address." }
         if cleanHost.contains("://") || cleanHost.contains(where: { $0.isWhitespace }) || cleanHost.contains("/") {
             return "Enter only the host name or IP address, without a URL or port."
+        }
+        if cleanHost.filter({ $0 == ":" }).count == 1 || cleanHost.contains("]:") {
+            return "Enter the server address and port in their separate fields."
         }
         if !(1...65535).contains(port) { return "Port must be between 1 and 65535." }
         if username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Enter a username." }

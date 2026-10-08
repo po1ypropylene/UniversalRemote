@@ -38,10 +38,10 @@ cmake -S "$source_root/FreeRDP" -B .build/freerdp -DCMAKE_BUILD_TYPE=Release \
   -DWITH_OPENH264=OFF -DWITH_GSM=OFF -DWITH_FAAC=OFF -DWITH_FAAD2=OFF -DWITH_LAME=OFF \
   -DWITH_OPUS=OFF -DWITH_VORBIS=OFF -DWITH_ALSA=OFF -DWITH_PULSE=OFF \
   -DWITH_GSSAPI=OFF -DWITH_KRB5=OFF -DWITH_WEBVIEW=OFF -DWITH_MANPAGES=OFF \
-  -DCHANNEL_URBDRC=OFF -DWITH_MACAUDIO=OFF -DWITH_AAD=OFF -DWITH_JSON_DISABLED=ON \
+  -DCHANNEL_URBDRC=OFF -DWITH_MACAUDIO=ON -DWITH_AAD=OFF -DWITH_JSON_DISABLED=ON \
   -DOPENSSL_ROOT_DIR="$install_root" -DOPENSSL_INCLUDE_DIR="$install_root/include" \
   -DOPENSSL_CRYPTO_LIBRARY="$install_root/lib/libcrypto.dylib" -DOPENSSL_SSL_LIBRARY="$install_root/lib/libssl.dylib"
 cmake --build .build/freerdp -j "$jobs"
 cmake --install .build/freerdp
 printf 'Native dependencies are ready. Open UniversalRemote.xcodeproj and build.\n'
-printf 'arm64-macos27\n' > "$install_root/.platform"
+printf 'arm64-macos27-audio1\n' > "$install_root/.platform"

@@ -15,7 +15,8 @@ NS_ASSUME_NONNULL_BEGIN
               width:(NSInteger)width
              height:(NSInteger)height
               scale:(NSInteger)scale
-          clipboard:(BOOL)clipboard;
+          clipboard:(BOOL)clipboard
+      audioPlayback:(BOOL)audioPlayback;
 - (void)resizeWidth:(NSInteger)width height:(NSInteger)height scale:(NSInteger)scale;
 - (void)sendScanCode:(NSInteger)code pressed:(BOOL)pressed extended:(BOOL)extended;
 - (void)sendUnicode:(NSInteger)code pressed:(BOOL)pressed;

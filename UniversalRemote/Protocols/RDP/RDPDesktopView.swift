@@ -29,6 +29,7 @@ final class RDPDesktopView: MTKView, MTKViewDelegate, NSTextInputClient {
     nonisolated let mailbox = FrameMailbox()
     var sendKey: ((Int, Bool, Bool) -> Void)?
     var sendUnicode: ((Int, Bool) -> Void)?
+    var preparePaste: (() -> Void)?
     var sendPointer: ((Int, Int, Int) -> Void)?
     var resizeRemote: ((Int, Int, Int) -> Void)?
     var inputEnabled = false
@@ -222,6 +223,7 @@ final class RDPDesktopView: MTKView, MTKViewDelegate, NSTextInputClient {
     }
     override func keyDown(with event: NSEvent) {
         guard inputEnabled else { return }
+        if event.keyCode == 9, event.modifierFlags.contains(.control) { preparePaste?() }
         let shortcut = !event.modifierFlags.intersection([.control, .option, .command]).isEmpty
         if !shortcut, let text = event.characters,
             text.unicodeScalars.contains(where: { $0.value >= 32 && $0.value != 127 && $0.value < 0xF700 })
@@ -266,6 +268,24 @@ final class RDPDesktopView: MTKView, MTKViewDelegate, NSTextInputClient {
         modifierKeys.removeAll()
     }
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard inputEnabled, window?.firstResponder === self else { return false }
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        if modifiers == .command, [UInt16(8), 9, 7, 0].contains(event.keyCode),
+            let code = Self.scanCodes[event.keyCode]
+        {
+            // macOS editing shortcuts become Windows Control shortcuts.
+            for key in [UInt16(55), 54] {
+                if let command = modifierKeys.removeValue(forKey: key) {
+                    sendKey?(command.0, false, command.1)
+                }
+            }
+            if event.keyCode == 9 { preparePaste?() }
+            sendKey?(0x1D, true, false)
+            sendKey?(code.0, true, code.1)
+            sendKey?(code.0, false, code.1)
+            sendKey?(0x1D, false, false)
+            return true
+        }
         // Keep application shortcuts available. Other shortcuts are sent when the desktop has focus.
         if event.modifierFlags.contains(.command),
             ["w", "q", "n", "f"].contains(event.charactersIgnoringModifiers?.lowercased() ?? "")

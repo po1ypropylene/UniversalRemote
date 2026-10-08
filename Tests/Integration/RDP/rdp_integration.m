@@ -10,17 +10,27 @@ int main(int argc, char **argv) {
         __weak URRDPClient *weakClient = client;
         dispatch_semaphore_t done = dispatch_semaphore_create(0);
         __block BOOL trusted = NO, connected = NO, failed = NO, frame = NO;
+        BOOL clipboardTest = [mode isEqualToString:@"clipboard"];
+        NSArray<NSString *> *samples = @[ @"Synthetic clipboard 繁體中文 😀\r\nSecond line", @"Updated fixture", @"" ];
+        __block NSUInteger clipboardCount = 0;
         client.onTrust = ^BOOL(NSString *fingerprint, NSString *details) {
           trusted = [fingerprint hasPrefix:@"SHA256:"];
           return ![mode isEqualToString:@"reject"];
         };
         client.onClipboard = ^(NSString *text) {
+          if (clipboardTest && clipboardCount < samples.count && [text isEqualToString:samples[clipboardCount]]) {
+              clipboardCount++;
+              if (clipboardCount < samples.count)
+                  [weakClient setClipboardText:samples[clipboardCount]];
+              else if (frame)
+                  [weakClient disconnect];
+          }
         };
         client.onCursor = ^(NSData *pixels, NSInteger w, NSInteger h, NSInteger x, NSInteger y) {
         };
         client.onFrame = ^(NSData *pixels, NSInteger w, NSInteger h, NSInteger stride) {
           frame = pixels.length == stride * h && w > 0 && h > 0;
-          if (frame)
+          if (frame && (!clipboardTest || clipboardCount == samples.count))
               [weakClient disconnect];
         };
         client.onStatus = ^(NSString *state, NSString *message) {
@@ -39,6 +49,8 @@ int main(int argc, char **argv) {
           if ([state isEqualToString:@"failed"] || [state isEqualToString:@"disconnected"])
               dispatch_semaphore_signal(done);
         };
+        if (clipboardTest)
+            [client setClipboardText:samples[0]];
         [client connectHost:@"127.0.0.1"
                        port:port
                    username:@"fixture"
@@ -46,7 +58,8 @@ int main(int argc, char **argv) {
                    password:([mode isEqualToString:@"bad-password"] ? @"wrong" : @"fixture-password")width:1024
                      height:768
                       scale:100
-                  clipboard:YES];
+                  clipboard:YES
+              audioPlayback:YES];
         BOOL timeout = dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 25 * NSEC_PER_SEC)) != 0;
         [client disconnect];
         BOOL pass = !timeout && trusted;
@@ -54,6 +67,8 @@ int main(int argc, char **argv) {
             pass = pass && failed && !connected;
         else
             pass = pass && connected && !failed && ([mode isEqualToString:@"cancel"] || frame);
+        if (clipboardTest)
+            pass = pass && clipboardCount == samples.count;
         printf("%s RDP %s (trust=%d connected=%d frame=%d)\n", pass ? "PASS" : "FAIL", mode.UTF8String, trusted,
                connected, frame);
         return pass ? 0 : 1;

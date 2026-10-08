@@ -216,7 +216,10 @@ struct WorkspaceView: View {
                 "This removes the saved profile and its saved credentials. Open sessions remain available until you close them."
             )
         }
-        .task { workspace.restoreWorkspace(connections) }
+        .task {
+            workspace.modelContext = context
+            workspace.restoreWorkspace(connections)
+        }
     }
     private func connectionRow(_ connection: SavedConnection) -> some View {
         HStack(spacing: 10) {

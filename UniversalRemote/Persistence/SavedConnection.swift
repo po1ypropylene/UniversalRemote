@@ -19,6 +19,7 @@ import SwiftData
     var desktopHeight: Int
     var dynamicResolution: Bool
     var clipboard: Bool
+    var audioPlayback: Bool = true
     var lastConnected: Date?
     var created: Date
     init(draft: ConnectionDraft) {
@@ -39,6 +40,7 @@ import SwiftData
         desktopHeight = draft.desktopHeight
         dynamicResolution = draft.dynamicResolution
         clipboard = draft.clipboard
+        audioPlayback = draft.audioPlayback
         created = Date()
     }
     var kind: RemoteProtocol { RemoteProtocol(rawValue: protocolName) ?? .ssh }
@@ -59,5 +61,6 @@ import SwiftData
         desktopHeight = draft.desktopHeight
         dynamicResolution = draft.dynamicResolution
         clipboard = draft.clipboard
+        audioPlayback = draft.audioPlayback
     }
 }

@@ -102,6 +102,7 @@ import SwiftTerm
                 client?.sendScanCode(code, pressed: down, extended: extended)
             }
             desktop.sendUnicode = { [weak client] code, down in client?.sendUnicode(code, pressed: down) }
+            desktop.preparePaste = { [weak self] in self?.syncClipboard() }
             desktop.sendPointer = { [weak client] flags, x, y in client?.sendPointerFlags(flags, x: x, y: y) }
             desktop.resizeRemote = { [weak self, weak client] width, height, scale in
                 guard let self, self.profile.dynamicResolution else { return }
@@ -110,7 +111,7 @@ import SwiftTerm
             client.connectHost(
                 profile.host, port: profile.port, username: profile.username, domain: profile.domain,
                 password: credential.password, width: profile.desktopWidth, height: profile.desktopHeight, scale: 100,
-                clipboard: profile.clipboard)
+                clipboard: profile.clipboard, audioPlayback: profile.audioPlayback)
         }
     }
     private func trustCallback(attempt: UUID) -> (String, String) -> Bool {
@@ -202,13 +203,16 @@ import SwiftTerm
         clipboardChange = -1
         clipboardTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, self.isSelected, self.state == .connected else { return }
-                let pasteboard = NSPasteboard.general
-                guard pasteboard.changeCount != self.clipboardChange else { return }
-                self.clipboardChange = pasteboard.changeCount
-                self.rdp?.setClipboardText(pasteboard.string(forType: .string) ?? "")
+                self?.syncClipboard()
             }
         }
+    }
+    private func syncClipboard() {
+        guard profile.clipboard, isSelected, state == .connected else { return }
+        let pasteboard = NSPasteboard.general
+        guard pasteboard.changeCount != clipboardChange else { return }
+        clipboardChange = pasteboard.changeCount
+        rdp?.setClipboardText(pasteboard.string(forType: .string) ?? "")
     }
     private func stopClipboard() {
         clipboardTimer?.invalidate()

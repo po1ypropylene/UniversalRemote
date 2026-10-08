@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
     @Published var editor: EditorRequest?
     @Published var showInspector = false
     let trust = TrustStore()
+    var modelContext: ModelContext?
     var selectedSession: RemoteSession? { sessions.first { $0.id == selectedSessionID } }
     func chooseTestServerFile() {
         let panel = NSOpenPanel()
@@ -69,8 +70,19 @@ import UniformTypeIdentifiers
         persistWorkspace()
     }
     func reconnect(_ session: RemoteSession) {
-        let draft = session.profile
+        var draft = session.profile
         let persistent = session.persistent
+        if persistent, let modelContext {
+            do {
+                let profileID = draft.id
+                var query = FetchDescriptor<SavedConnection>(predicate: #Predicate { $0.id == profileID })
+                query.fetchLimit = 1
+                if let saved = try modelContext.fetch(query).first { draft = ConnectionDraft(saved) }
+            } catch {
+                self.error = "Could not reload the saved connection. Try again before reconnecting."
+                return
+            }
+        }
         close(session)
         connect(draft, persistent: persistent)
     }

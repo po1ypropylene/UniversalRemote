@@ -22,6 +22,12 @@ final class CoreTests: XCTestCase {
         XCTAssertNotNil(profile.validationMessage)
         profile.host = "server example.com"
         XCTAssertNotNil(profile.validationMessage)
+        for address in ["server.example:3389", "192.0.2.1:3389", "[2001:db8::1]:3389"] {
+            profile.host = address
+            XCTAssertNotNil(profile.validationMessage)
+        }
+        profile.host = "2001:db8::1"
+        XCTAssertNil(profile.validationMessage)
     }
     func testEndpointTrustIsSeparatedByProtocolAndPort() {
         var ssh = ConnectionDraft()
@@ -54,6 +60,7 @@ final class CoreTests: XCTestCase {
         draft.kind = .rdp
         draft.port = 3389
         draft.clipboard = true
+        draft.audioPlayback = false
         draft.dynamicResolution = false
         first.mainContext.insert(folder)
         first.mainContext.insert(SavedConnection(draft: draft))
@@ -65,6 +72,7 @@ final class CoreTests: XCTestCase {
         let restored = ConnectionDraft(profiles[0])
         XCTAssertEqual(restored.kind, .rdp)
         XCTAssertTrue(restored.clipboard)
+        XCTAssertFalse(restored.audioPlayback)
         XCTAssertFalse(restored.dynamicResolution)
         let fieldNames = schema.entities.first { $0.name == "SavedConnection" }!.properties.map(\.name)
         XCTAssertFalse(fieldNames.contains("password"))

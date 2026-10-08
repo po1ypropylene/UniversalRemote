@@ -129,7 +129,8 @@ int main(int argc, char **argv) {
                                  width:1024
                                 height:768
                                  scale:100
-                             clipboard:NO];
+                             clipboard:NO
+                         audioPlayback:NO];
             }
             BOOL timeout = dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 40 * NSEC_PER_SEC)) != 0;
             [sshClient disconnect];

@@ -1,5 +1,25 @@
 # Phase 1 validation
 
+## Form, RDP clipboard and audio — 8 October 2026
+
+- Release build passed with the rebuilt pinned Mac audio backend; final bundle platform, native-library closure, signatures and pre-UI loader checks passed.
+- An isolated preview used the actual connection editor with in-memory SwiftData and stubbed credential/network actions. Clicking the blank middle of both Display options and Sharing & server identity expanded them. Separate address/port labels, RDP 3389 guidance and SSH 22 switching were inspected. No real credentials or clipboard contents were accessed.
+- Twelve core tests passed, including separate address/port validation, IPv6, and saved audio preferences. A disposable database created with the previous SavedConnection schema reopened with the new schema, preserving its synthetic profile, notes and clipboard setting while applying the audio default.
+- Seven synthetic SSH tests, four RDP TLS tests, five RDP NLA tests and four protected-file probe fixture checks passed. Both RDP suites now round-trip synthetic Chinese text, emoji, line breaks, subsequent updates and an empty clipboard through the protocol channel.
+- The actual Mac audio backend passed registration, output-device initialization, silent PCM playback and shutdown. This is a local backend check, not proof of audible playback from a production RDP server.
+- Synthetic keyboard-handler checks passed for Command+C/X/V/A, paste synchronization before key events, Command release, native Control+V, reserved app shortcuts and disconnected input. No system clipboard was read or changed.
+- The production Workspace reconnect method passed an isolated in-memory check with stubbed credentials/transports: it reloads saved clipboard/audio edits, preserves ad hoc session settings, and retains a deleted profile's session snapshot. The final Release build and bundle verification passed after this correction.
+- Repository hygiene and diff whitespace checks passed. Real-server clipboard integration, audible remote playback and server redirection policies remain unverified for this change. Save sharing changes and reconnect an existing session to apply them.
+
+## Add-connection form — 8 October 2026
+
+The Organization & notes section and its controls are removed from every connection
+editor mode: New connection, Quick Connect and Edit connection. Existing folder, favorite and notes data
+is preserved. The formatted Swift source passed the Release build, final bundle
+and loader verification, repository hygiene and diff whitespace checks. This
+form-only change did not repeat protocol tests or live-server connections; visual
+UI inspection was not performed.
+
 Checked on 7 October 2026, on the development Apple silicon Mac with Xcode 27.
 
 ## Completed

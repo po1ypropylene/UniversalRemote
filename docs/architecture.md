@@ -55,10 +55,18 @@ Version.xcconfig is the sole version/build source, referenced by both Xcode targ
 
 ## Deliberately deferred
 
-SFTP/SCP/WebDAV/file transfer; SSH config/agent/jump hosts/forwarding/certificates/hardware keys; RDP Gateway/RemoteApp/audio/devices/drive redirection/multiple monitors/hardware video; nested folders/cloud sync/updater. The source license is undecided. Production interoperability and distribution are not claimed by synthetic fixture passes.
+SFTP/SCP/WebDAV/file transfer; SSH config/agent/jump hosts/forwarding/certificates/hardware keys; RDP Gateway/RemoteApp/microphone capture/devices/drive redirection/multiple monitors/hardware video; nested folders/cloud sync/updater. The source license is undecided. Production interoperability and distribution are not claimed by synthetic fixture passes.
 
 ## Connection editor and desktop negotiation — 8 October 2026
 
-The editor keeps protocol, name, host/port, username/domain, authentication and credentials in one form. Organization, appearance and trust settings use inline disclosure groups. Session tabs use SwiftUI GlassEffectContainer and interactive capsule glass, with a tinted selected tab; primary editor actions use the native glass button style. Session ownership, reordering and disconnect semantics are unchanged.
+The editor keeps protocol, name, host/port, username/domain, authentication and credentials in one form. Appearance and trust settings use inline disclosure groups. The connection editor omits organization and notes in all modes, including editing saved connections. Session tabs use SwiftUI GlassEffectContainer and interactive capsule glass, with a tinted selected tab; primary editor actions use the native glass button style. Session ownership, reordering and disconnect semantics are unchanged.
 
 The supplied real RDP server authenticated with graphics-pipeline support enabled but delivered no paint callbacks/visible frames. Disabling SupportGraphicsPipeline delivered visible desktop pixels. Phase 1 therefore negotiates standard software bitmap rendering (RemoteFX/NSCodec remain available), retaining independent dynamic display control. This is a verified workaround for that server, not a complete diagnosis of its GFX interoperability or a claim about all servers. The Metal renderer and latest-frame buffering are unchanged.
+
+## Form interaction, clipboard and playback — 8 October 2026
+
+Disclosure headers use a full-width button with an expanded/collapsed accessibility value. Server address and port have separate labelled rows and protocol-specific default-port guidance. Validation rejects a host combined with a port while retaining IPv6 support.
+
+The RDP worker retains local clipboard updates even before channel attachment and advertises them only after MonitorReady. It advertises text only once a local value exists. The selected session synchronizes pending clipboard changes before paste input as well as on its timer. Command+C/X/V/A translate to Windows Control shortcuts, releasing any previously forwarded Command modifier first. Clipboard sharing remains opt-in and text-only. Reconnecting a saved session reloads its current profile from the workspace model context so edited sharing settings take effect; ad hoc or deleted profiles retain their session snapshot. A failed metadata fetch leaves the existing session open and reports the error.
+
+FreeRDP's pinned Mac audio backend is now built and bundled. The saved audioPlayback Boolean defaults to true, including automatic migration of older profiles; existing entity/property identities stay intact. The adapter requests remote playback and disables microphone capture. FreeRDP owns audio output and its connection lifecycle. No external player is launched. The native feature stamp now includes audio1 so existing checkouts rebuild the previously audio-disabled libraries.

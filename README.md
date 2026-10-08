@@ -24,9 +24,10 @@ releases are unsupported.
 ## Connect
 
 1. Choose **SSH Terminal**, **Remote Desktop**, or **Quick Connect**.
-2. Enter the protocol, name, host, port, username and password together in the
-   connection editor. RDP also has an optional domain. Organization, display and
-   trust options expand below the main fields.
+2. Enter the protocol, name, server address, port, username and password in the
+   connection editor. Server address is just the IP address or host name. Port is
+   a separate field, initially 22 for SSH or 3389 for RDP. RDP also has an optional domain. Display and trust options
+   expand below the main fields.
 3. For SSH, choose password authentication or select an imported private key. Keys
    and their passphrases can be saved on this Mac. Keyboard-interactive SSH
    authentication displays the server's prompts when connecting. There is no
@@ -72,11 +73,16 @@ disconnected until you choose Reconnect; ad hoc connections are not restored.
 - Mouse, keyboard, scrolling, remote cursor, Unicode text input, and
   **Ctrl + Alt + Delete**.
 - Optional text clipboard sharing while the session is selected. It defaults off.
-  Use Control+C / Control+V inside Windows. Command maps to the Windows key;
+  Enable **Share text clipboard** under **Sharing & server identity**, save and
+  reconnect. Use Command+C / Command+V or Control+C / Control+V inside Windows.
+  Command+C/X/V/A map to Windows Control shortcuts; otherwise Command maps to the Windows key;
   app shortcuts such as Command+W and Command+Q remain local.
+- Remote sound plays through this Mac by default. Turn off **Play remote sound on
+  this Mac** under **Sharing & server identity** to mute it after reconnecting.
+  The server must allow audio playback redirection. Microphone sharing is unavailable.
 - US physical scan-code layout plus Unicode text input. Additional physical
   keyboard layouts, advanced IME behavior, multi-monitor support, hardware video
-  decoding, audio, RD Gateway, RemoteApp, smart cards, printers, and drive/file
+  decoding, microphone capture, RD Gateway, RemoteApp, smart cards, printers, and drive/file
   redirection are not included in this release.
 
 ## Shortcuts
@@ -209,6 +215,8 @@ scripts/test-ssh.sh
 scripts/prepare-rdp-fixture.sh
 scripts/test-rdp.sh
 scripts/test-rdp-nla.sh
+scripts/test-rdp-audio.sh
+scripts/test-rdp-keyboard.sh
 scripts/test-live-fixtures.sh
 python3 scripts/check-repository-hygiene.py
 
@@ -222,6 +230,11 @@ resize, rejected trust, wrong passwords, and cancellation. The RDP fixture uses
 an upstream sample desktop, not the user's screen, and checks TLS trust decisions,
 framebuffer delivery, and cancellation. It can also enable NLA with a synthetic
 SAM file through `UNIVERSALREMOTE_FIXTURE_NLA` and `UNIVERSALREMOTE_FIXTURE_SAM`.
+The disposable RDP fixture also echoes synthetic Unicode clipboard text through
+the actual clipboard channel, including updates and clearing. The audio test opens
+the Mac output device and plays silence; the keyboard test uses synthetic events.
+These tests never read the user's clipboard. Audible playback from a real server
+still needs verification.
 Fixture processes are stopped when their harness exits.
 
 See `docs/validation.md` for completed checks and remaining release validation.

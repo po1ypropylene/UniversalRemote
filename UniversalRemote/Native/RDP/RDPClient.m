@@ -29,6 +29,7 @@ typedef struct {
     void *owner;
     DispClientContext *display;
     CliprdrClientContext *clipboard;
+    BOOL clipboardReady;
     NSString *__unsafe_unretained localText;
     double lastFrame;
 } URContext;
@@ -43,14 +44,15 @@ typedef struct {
     atomic_bool _stopped;
 }
 - (void)runHost:(NSString *)host
-           port:(NSInteger)port
-       username:(NSString *)username
-         domain:(NSString *)domain
-       password:(NSString *)password
-          width:(NSInteger)width
-         height:(NSInteger)height
-          scale:(NSInteger)scale
-      clipboard:(BOOL)clipboard;
+             port:(NSInteger)port
+         username:(NSString *)username
+           domain:(NSString *)domain
+         password:(NSString *)password
+            width:(NSInteger)width
+           height:(NSInteger)height
+            scale:(NSInteger)scale
+        clipboard:(BOOL)clipboard
+    audioPlayback:(BOOL)audioPlayback;
 - (void)drainEvents:(URContext *)context;
 @end
 static URRDPClient *owner(rdpContext *context) { return (__bridge URRDPClient *)((URContext *)context)->owner; }
@@ -109,9 +111,12 @@ static BOOL pointerNull(rdpContext *context) {
     return TRUE;
 }
 static UINT advertiseClipboard(CliprdrClientContext *clip) {
+    URContext *ctx = clip->custom;
+    if (!ctx->clipboardReady)
+        return CHANNEL_RC_OK;
     CLIPRDR_FORMAT format = {.formatId = CF_UNICODETEXT, .formatName = NULL};
     CLIPRDR_FORMAT_LIST list = {0};
-    list.numFormats = 1;
+    list.numFormats = ctx->localText ? 1 : 0;
     list.formats = &format;
     return clip->ClientFormatList(clip, &list);
 }
@@ -127,6 +132,7 @@ static UINT clipboardReady(CliprdrClientContext *clip, const CLIPRDR_MONITOR_REA
     UINT rc = clip->ClientCapabilities(clip, &caps);
     if (rc)
         return rc;
+    ((URContext *)clip->custom)->clipboardReady = YES;
     return advertiseClipboard(clip);
 }
 static UINT clipboardFormats(CliprdrClientContext *clip, const CLIPRDR_FORMAT_LIST *list) {
@@ -196,8 +202,10 @@ static void channelDisconnected(void *context, const ChannelDisconnectedEventArg
         gdi_graphics_pipeline_uninit(((rdpContext *)context)->gdi, event->pInterface);
     else if (!strcmp(event->name, "disp"))
         ctx->display = NULL;
-    else if (!strcmp(event->name, "cliprdr"))
+    else if (!strcmp(event->name, "cliprdr")) {
         ctx->clipboard = NULL;
+        ctx->clipboardReady = NO;
+    }
 }
 static BOOL preConnect(freerdp *instance) {
     rdpContext *context = instance->context;
@@ -328,30 +336,33 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
               width:(NSInteger)width
              height:(NSInteger)height
               scale:(NSInteger)scale
-          clipboard:(BOOL)clipboard {
+          clipboard:(BOOL)clipboard
+      audioPlayback:(BOOL)audioPlayback {
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
       @autoreleasepool {
           [self runHost:host
-                   port:port
-               username:username
-                 domain:domain
-               password:password
-                  width:width
-                 height:height
-                  scale:scale
-              clipboard:clipboard];
+                       port:port
+                   username:username
+                     domain:domain
+                   password:password
+                      width:width
+                     height:height
+                      scale:scale
+                  clipboard:clipboard
+              audioPlayback:audioPlayback];
       }
     });
 }
 - (void)runHost:(NSString *)host
-           port:(NSInteger)port
-       username:(NSString *)username
-         domain:(NSString *)domain
-       password:(NSString *)password
-          width:(NSInteger)width
-         height:(NSInteger)height
-          scale:(NSInteger)scale
-      clipboard:(BOOL)clipboard {
+             port:(NSInteger)port
+         username:(NSString *)username
+           domain:(NSString *)domain
+         password:(NSString *)password
+            width:(NSInteger)width
+           height:(NSInteger)height
+            scale:(NSInteger)scale
+        clipboard:(BOOL)clipboard
+    audioPlayback:(BOOL)audioPlayback {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
       freerdp_register_addin_provider(freerdp_channels_load_static_addin_entry, 0);
@@ -399,6 +410,9 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
     freerdp_settings_set_bool(s, FreeRDP_IgnoreCertificate, FALSE);
     freerdp_settings_set_bool(s, FreeRDP_CertificateCallbackPreferPEM, TRUE);
     freerdp_settings_set_bool(s, FreeRDP_RedirectClipboard, clipboard);
+    freerdp_settings_set_bool(s, FreeRDP_AudioPlayback, audioPlayback);
+    freerdp_settings_set_bool(s, FreeRDP_RemoteConsoleAudio, FALSE);
+    freerdp_settings_set_bool(s, FreeRDP_AudioCapture, FALSE);
     freerdp_settings_set_bool(s, FreeRDP_SupportDynamicChannels, TRUE);
     freerdp_settings_set_bool(s, FreeRDP_SupportDisplayControl, TRUE);
     freerdp_settings_set_bool(s, FreeRDP_DynamicResolutionUpdate, TRUE);
@@ -484,10 +498,11 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
             layout.DesktopScaleFactor = [event[@"scale"] unsignedIntValue];
             layout.DeviceScaleFactor = layout.DesktopScaleFactor >= 200 ? 180 : 100;
             ctx->display->SendMonitorLayout(ctx->display, 1, &layout);
-        } else if ([type isEqualToString:@"clipboard"] && ctx->clipboard) {
+        } else if ([type isEqualToString:@"clipboard"]) {
             _clipboardText = event[@"text"];
             ctx->localText = _clipboardText;
-            advertiseClipboard(ctx->clipboard);
+            if (ctx->clipboard)
+                advertiseClipboard(ctx->clipboard);
         }
     }
 }

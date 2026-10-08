@@ -6,7 +6,6 @@ import UniformTypeIdentifiers
 struct ConnectionEditor: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \ConnectionFolder.order) private var folders: [ConnectionFolder]
     @Query private var saved: [SavedConnection]
     @ObservedObject var workspace: Workspace
     let request: EditorRequest
@@ -41,11 +40,15 @@ struct ConnectionEditor: View {
                         Picker("Protocol", selection: $draft.kind) {
                             ForEach(RemoteProtocol.allCases) { Text($0.rawValue).tag($0) }
                         }.pickerStyle(.segmented)
-                        HStack(spacing: 20) {
-                            TextField("Host", text: $draft.host, prompt: Text("Host name or IP address"))
-                            TextField("Port", value: $draft.port, format: .number.grouping(.never))
-                                .frame(width: 140)
-                        }
+                        TextField(
+                            "Server address", text: $draft.host, prompt: Text("192.168.1.10 or server.example.com"))
+                        Text("Enter the computer’s IP address or host name, without a protocol prefix or port.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        TextField("Port", value: $draft.port, format: .number.grouping(.never))
+                        Text(
+                            "The standard \(draft.kind.rawValue) port is \(draft.kind.defaultPort.formatted(.number.grouping(.never))). Change it only if your server uses a different port."
+                        )
+                        .font(.caption).foregroundStyle(.secondary)
                         TextField("Username", text: $draft.username)
                         if draft.kind == .rdp {
                             TextField("Domain", text: $draft.domain, prompt: Text("Optional"))
@@ -57,10 +60,9 @@ struct ConnectionEditor: View {
                         }
                         credentialFields
                     }
-                    DisclosureGroup("Organization & notes") { organization }
                     DisclosureGroup(draft.kind == .ssh ? "Terminal options" : "Display options") { appearance }
                     DisclosureGroup("Sharing & server identity") { advanced }
-                }.formStyle(.grouped).padding(.vertical, 8)
+                }.formStyle(.grouped).disclosureGroupStyle(ConnectionOptionsStyle()).padding(.vertical, 8)
             }.frame(height: 530)
             Divider()
             HStack {
@@ -90,18 +92,6 @@ struct ConnectionEditor: View {
                 if new == .rdp { draft.authentication = .password }
             }
             .onChange(of: draft.authentication) { _, _ in credential = ConnectionCredential() }
-    }
-    private var organization: some View {
-        Group {
-            Section("Connection") {
-                Picker("Folder", selection: $draft.folderID) {
-                    Text("Unfiled").tag(UUID?.none)
-                    ForEach(folders) { Text($0.name).tag(Optional($0.id)) }
-                }
-                Toggle("Favorite", isOn: $draft.favorite)
-            }
-            Section("Notes") { TextEditor(text: $draft.notes).frame(height: 90).font(.body) }
-        }
     }
     @ViewBuilder private var credentialFields: some View {
         if draft.kind == .rdp || draft.authentication == .password {
@@ -160,8 +150,9 @@ struct ConnectionEditor: View {
             if draft.kind == .rdp {
                 Section("Sharing") {
                     Toggle("Share text clipboard", isOn: $draft.clipboard)
+                    Toggle("Play remote sound on this Mac", isOn: $draft.audioPlayback)
                     Text(
-                        "While this session is selected, copied text can pass between your Mac and the remote desktop. File sharing is not enabled."
+                        "Enable clipboard sharing to copy text between this Mac and the selected desktop. Use ⌘C and ⌘V, or Windows Control+C and Control+V. Changes apply when you reconnect."
                     ).font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -216,5 +207,27 @@ struct ConnectionEditor: View {
                 }
             }
         } catch { self.error = error.localizedDescription }
+    }
+}
+
+private struct ConnectionOptionsStyle: DisclosureGroupStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation { configuration.isExpanded.toggle() }
+            } label: {
+                HStack {
+                    configuration.label
+                    Spacer()
+                    Image(systemName: configuration.isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                    .contentShape(Rectangle())
+            }.buttonStyle(.plain)
+                .accessibilityValue(configuration.isExpanded ? "Expanded" : "Collapsed")
+            if configuration.isExpanded {
+                configuration.content.padding(.top, 8)
+            }
+        }
     }
 }

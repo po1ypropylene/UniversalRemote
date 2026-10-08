@@ -14,6 +14,6 @@ fixture_pid=$!
 trap 'kill "$fixture_pid" 2>/dev/null || true' EXIT
 sleep 0.5
 xcrun clang -fobjc-arc -mmacosx-version-min=27.0 -I UniversalRemote/Native/SSH -I UniversalRemote/Native/RDP -I Vendor/Native/include -I Vendor/Native/include/freerdp3 -I Vendor/Native/include/winpr3 -L Vendor/Native/lib -Wl,-rpath,"$PWD/Vendor/Native/lib" -framework Foundation -framework Security -lfreerdp3 -lfreerdp-client3 -lwinpr3 -lcrypto UniversalRemote/Native/RDP/RDPClient.m Tests/Integration/RDP/rdp_integration.m -o .build/rdp-test/client
-modes=(accept reject cancel)
+modes=(accept reject cancel clipboard)
 [[ -z "${UNIVERSALREMOTE_FIXTURE_NLA:-}" ]] || modes+=(bad-password)
 for mode in "${modes[@]}"; do .build/rdp-test/client "$mode" "$fixture_port"; done
