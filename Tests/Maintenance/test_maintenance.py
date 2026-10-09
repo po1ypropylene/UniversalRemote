@@ -4,6 +4,7 @@ import importlib.util
 import io
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -42,19 +43,89 @@ class MaintenanceTests(unittest.TestCase):
             module.remove(path)
         for relative in ('.local-testing/servers.json', 'Tests/Fixtures/source', 'tracked.log'):
             self.assertEqual((self.root / relative).read_text(), 'synthetic')
-        self.assertFalse((self.root / '.build').exists())
+        self.assertFalse((self.root / '.build/test-fixture').exists())
         self.assertFalse((self.root / 'debug.log').exists())
 
-    def test_cleanup_unlinks_generated_symlink_without_following_it(self):
+    def test_cleanup_refuses_symlinked_dependency_parent(self):
         module = load('clean-project')
         self.git('init', '-q')
         outside = self.root / 'keep'
         outside.mkdir()
         (outside / 'data').write_text('keep')
         (self.root / '.build').symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(RuntimeError, 'redirected'):
+            module.targets(self.root)
+        self.assertEqual((outside / 'data').read_text(), 'keep')
+
+    def test_cleanup_preserves_all_dependency_locations(self):
+        module = load('clean-project')
+        self.git('init', '-q')
+        for relative in module.PRESERVED:
+            path = self.root / relative / 'sentinel'
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('dependency')
+        for relative in ('.build/Xcode/Build/app', '.build/wireguard/fixture/output',
+                         '.build/rdp-fixture/server', '.build/core-tests/debug/test', 'DerivedData/Logs/log'):
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('generated')
         for path in module.targets(self.root):
             module.remove(path)
-        self.assertEqual((outside / 'data').read_text(), 'keep')
+        for relative in module.PRESERVED:
+            self.assertEqual((self.root / relative / 'sentinel').read_text(), 'dependency')
+        self.assertFalse((self.root / '.build/Xcode/Build').exists())
+        self.assertFalse((self.root / '.build/wireguard/fixture').exists())
+        self.assertFalse((self.root / '.build/rdp-fixture').exists())
+        self.assertFalse((self.root / '.build/core-tests/debug').exists())
+        self.assertFalse((self.root / 'DerivedData/Logs').exists())
+
+    def test_semver_accepts_prefixed_tags_and_rejects_downgrades(self):
+        module = load('update-dependencies')
+        refs = ('a\trefs/tags/1.5.0\nb\trefs/tags/v1.9.0\n'
+                'c\trefs/tags/v1.20.0\nd\trefs/tags/v1.20.0^{}\n'
+                'e\trefs/tags/V1.11.1\nf\trefs/tags/v2.0.0\n'
+                'g\trefs/tags/v1.21.0-beta1')
+        with patch.object(module, 'run', return_value=refs):
+            self.assertEqual(module.tag_pin('url', '', 'latest', '1.20.0'), ('1.20.0', 'd'))
+            self.assertEqual(module.tag_pin('url', '', '1.20.0', '1.5.0'), ('1.20.0', 'd'))
+            with self.assertRaisesRegex(RuntimeError, 'downgrade'):
+                module.tag_pin('url', '', '1.5.0', '1.20.0')
+        with patch.object(module, 'run', return_value='a\trefs/tags/1.5.0'):
+            with self.assertRaisesRegex(RuntimeError, 'downgrade'):
+                module.tag_pin('url', '', 'latest', '1.20.0')
+
+    def test_cleanup_removes_read_only_go_module_cache(self):
+        module = load('clean-project')
+        cache = self.root / '.build/wireguard/mod/gvisor.dev/gvisor@synthetic'
+        nested = cache / 'pkg/nested'
+        nested.mkdir(parents=True)
+        (nested / 'source.go').write_text('synthetic')
+        (nested / 'source.go').chmod(0o444)
+        for path in (nested, nested.parent, cache):
+            path.chmod(0o555)
+        module.remove(self.root / '.build')
+        self.assertFalse((self.root / '.build').exists())
+
+    def test_read_only_cleanup_preserves_external_link_permissions(self):
+        module = load('clean-project')
+        cache = self.root / '.build/mod'
+        cache.mkdir(parents=True)
+        outside = self.root / 'keep'
+        outside.mkdir()
+        external = outside / 'source'
+        external.write_text('keep')
+        external.chmod(0o444)
+        (cache / 'hardlink').hardlink_to(external)
+        (cache / 'symlink').symlink_to(outside, target_is_directory=True)
+        cache.chmod(0o555)
+        outside.chmod(0o555)
+        try:
+            module.remove(self.root / '.build')
+            self.assertEqual(external.read_text(), 'keep')
+            self.assertEqual(stat.S_IMODE(external.stat().st_mode), 0o444)
+            self.assertEqual(stat.S_IMODE(outside.stat().st_mode), 0o555)
+        finally:
+            outside.chmod(0o755)
 
     def test_cleanup_refuses_tracked_generated_target(self):
         module = load('clean-project')

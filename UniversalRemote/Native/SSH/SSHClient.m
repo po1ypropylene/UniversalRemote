@@ -14,6 +14,8 @@
 @interface URSSHClient () {
     atomic_bool _stopped;
     atomic_bool _filesCancelled;
+    NSString *_conflictToken;
+    NSInteger _conflictChoice;
     double _lastTerminalPump;
     NSLock *_lock;
     NSMutableData *_outgoing;
@@ -397,6 +399,40 @@ cleanup:
         @"move" : @(move)
     }];
 }
+- (void)resolveFileConflict:(NSString *)token overwrite:(BOOL)overwrite {
+    [_lock lock];
+    if ([_conflictToken isEqual:token] && _conflictChoice == -1)
+        _conflictChoice = overwrite ? 1 : 0;
+    [_lock unlock];
+}
+- (BOOL)approveReplacement:(NSString *)path {
+    if (!self.onFileConflict)
+        return NO;
+    NSString *token = NSUUID.UUID.UUIDString;
+    [_lock lock];
+    _conflictToken = token;
+    _conflictChoice = -1;
+    [_lock unlock];
+    self.onFileConflict(token, path.lastPathComponent);
+    NSInteger choice = -1;
+    while (!atomic_load(&_stopped) && !atomic_load(&_filesCancelled)) {
+        [_lock lock];
+        choice = _conflictChoice;
+        [_lock unlock];
+        if (choice >= 0)
+            break;
+        if (![self pumpTerminal:_workerChannel]) {
+            [self disconnect];
+            break;
+        }
+        struct pollfd pending = {_socket, POLLIN, 0};
+        poll(&pending, 1, 20);
+    }
+    [_lock lock];
+    _conflictToken = nil;
+    [_lock unlock];
+    return choice == 1 && !atomic_load(&_stopped) && !atomic_load(&_filesCancelled);
+}
 - (BOOL)waitForFileUntil:(double)deadline {
     // Preserve SFTP's readiness directions before terminal reads change the
     // session's last-operation directions. POLLOUT must not become POLLIN.
@@ -435,6 +471,8 @@ cleanup:
     BOOL listing = [request[@"kind"] isEqualToString:@"list"];
     BOOL created = NO, complete = NO;
     NSString *stagingPath = nil;
+    NSString *remoteStaging = nil;
+    BOOL replacing = NO;
     unsigned long long bytes = 0, total = 0;
     double deadline = monotonicTime() + 30;
     int rc = 0;
@@ -472,13 +510,45 @@ cleanup:
         }
     } else {
         NSString *localPath = request[@"local"];
-        if (!upload) {
-            struct stat existing;
-            if (lstat(localPath.fileSystemRepresentation, &existing) == 0 || errno != ENOENT) {
-                error =
-                    @"The local destination already exists or cannot be checked. Existing files are never replaced.";
+        if (upload && self.onFileConflict) {
+            LIBSSH2_SFTP_ATTRIBUTES existing = {0};
+            do {
+                rc = libssh2_sftp_lstat(_sftp, path.UTF8String, &existing);
+            } while (rc == LIBSSH2_ERROR_EAGAIN && [self waitForFileUntil:deadline]);
+            if (!rc) {
+                if (!(existing.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) ||
+                    (existing.permissions & LIBSSH2_SFTP_S_IFMT) != LIBSSH2_SFTP_S_IFREG) {
+                    error = @"Only regular destination files can be overwritten.";
+                    goto finish;
+                }
+                if (![self approveReplacement:path]) {
+                    error = @"Transfer stopped. No replacement was made.";
+                    goto finish;
+                }
+                replacing = YES;
+                remoteStaging =
+                    [self appendName:[@".universalremote-transfer-" stringByAppendingString:NSUUID.UUID.UUIDString]
+                              toPath:path.stringByDeletingLastPathComponent];
+            } else if (libssh2_sftp_last_error(_sftp) != LIBSSH2_FX_NO_SUCH_FILE) {
+                error = @"Could not check the server destination.";
                 goto finish;
             }
+            deadline = monotonicTime() + 30;
+        }
+        if (!upload) {
+            struct stat existing;
+            int found = lstat(localPath.fileSystemRepresentation, &existing);
+            if (found == 0) {
+                if (!S_ISREG(existing.st_mode) || ![self approveReplacement:localPath]) {
+                    error = @"Transfer stopped. Existing destination was retained.";
+                    goto finish;
+                }
+                replacing = YES;
+            } else if (errno != ENOENT) {
+                error = @"Could not check the local destination.";
+                goto finish;
+            }
+            deadline = monotonicTime() + 30;
             stagingPath = [[localPath stringByDeletingLastPathComponent]
                 stringByAppendingPathComponent:[@".universalremote-transfer-"
                                                    stringByAppendingString:NSUUID.UUID.UUIDString]];
@@ -499,7 +569,8 @@ cleanup:
             total = st.st_size;
     }
     do {
-        handle = libssh2_sftp_open_ex(_sftp, path.UTF8String, (unsigned int)strlen(path.UTF8String),
+        NSString *openPath = remoteStaging ?: path;
+        handle = libssh2_sftp_open_ex(_sftp, openPath.UTF8String, (unsigned int)strlen(openPath.UTF8String),
                                       listing  ? 0
                                       : upload ? LIBSSH2_FXF_WRITE | LIBSSH2_FXF_CREAT | LIBSSH2_FXF_EXCL
                                                : LIBSSH2_FXF_READ,
@@ -568,7 +639,7 @@ cleanup:
         }
         // libssh2 pipelines the SFTP packets inside this bounded window. A
         // single 32 KiB call otherwise waits for an ACK per application chunk.
-        NSMutableData *window = [NSMutableData dataWithLength:upload ? 1024 * 1024 : 256 * 1024];
+        NSMutableData *window = [NSMutableData dataWithLength:upload ? 4 * 1024 * 1024 : 256 * 1024];
         char *buffer = window.mutableBytes;
         size_t bufferSize = window.length;
         double lastProgress = 0;
@@ -589,7 +660,7 @@ cleanup:
             while (offset < count && !atomic_load(&_stopped)) {
                 ssize_t written = upload ? libssh2_sftp_write(handle, buffer + offset, count - offset)
                                          : write(fd, buffer + offset, count - offset);
-                if (upload && written == LIBSSH2_ERROR_EAGAIN) {
+                if (upload && (written == LIBSSH2_ERROR_EAGAIN || written == 0)) {
                     if ([self waitForFileUntil:deadline])
                         continue;
                     break;
@@ -599,6 +670,31 @@ cleanup:
                 offset += written;
                 bytes += written;
                 deadline = monotonicTime() + 30;
+                // Refill only after a positive acknowledgement, never on EAGAIN:
+                // libssh2 requires identical unacknowledged bytes on retries.
+                // Keeping the bounded window full avoids draining it between reads.
+                if (upload && offset >= 256 * 1024 && !atomic_load(&_filesCancelled)) {
+                    size_t remaining = count - offset;
+                    memmove(buffer, buffer + offset, remaining);
+                    ssize_t added = read(fd, buffer + remaining, bufferSize - remaining);
+                    if (added < 0) {
+                        error = @"Could not read the upload source.";
+                        break;
+                    }
+                    count = remaining + added;
+                    offset = 0;
+                    if (monotonicTime() - _lastTerminalPump >= 0.01) {
+                        _lastTerminalPump = monotonicTime();
+                        if (![self pumpTerminal:_workerChannel]) {
+                            [self disconnect];
+                            break;
+                        }
+                    }
+                    if (self.onFileProgress && monotonicTime() - lastProgress >= 0.1) {
+                        self.onFileProgress(requestID, bytes, total);
+                        lastProgress = monotonicTime();
+                    }
+                }
             }
             if (offset != count)
                 break;
@@ -637,11 +733,31 @@ finish:
         close(fd);
     }
     if (!upload && created) {
-        if (complete && link(stagingPath.fileSystemRepresentation, [request[@"local"] fileSystemRepresentation])) {
+        if (complete &&
+            (replacing ? rename(stagingPath.fileSystemRepresentation, [request[@"local"] fileSystemRepresentation])
+                       : link(stagingPath.fileSystemRepresentation, [request[@"local"] fileSystemRepresentation]))) {
             error = @"Could not save the download. The destination may already exist; no existing file was replaced.";
             complete = NO;
         }
         unlink(stagingPath.fileSystemRepresentation);
+    }
+    if (remoteStaging) {
+        if (complete && !atomic_load(&_filesCancelled) && !atomic_load(&_stopped)) {
+            // Atomic replacement never follows a destination symlink, and preserves
+            // the old bytes until the entire upload and handle close succeed.
+            deadline = monotonicTime() + 30;
+            do {
+                rc = libssh2_sftp_posix_rename(_sftp, remoteStaging.UTF8String, path.UTF8String);
+            } while (rc == LIBSSH2_ERROR_EAGAIN && [self waitForFileUntil:deadline]);
+            if (rc)
+                error = @"The server could not atomically replace the file. The original was retained.";
+        }
+        if (!complete || error || atomic_load(&_filesCancelled)) {
+            deadline = monotonicTime() + 5;
+            do {
+                rc = libssh2_sftp_unlink(_sftp, remoteStaging.UTF8String);
+            } while (rc == LIBSSH2_ERROR_EAGAIN && [self waitForFileUntil:deadline]);
+        }
     }
     // Leave an interrupted upload for the user to inspect. Deleting by remote
     // pathname could remove another client's replacement on a shared server.
@@ -852,10 +968,14 @@ finish:
             break;
         }
         if ([entry[@"attributes"][@"directory"] boolValue]) {
-            if (upload)
-                failure = [self makeRemoteDirectory:dst];
-            else if (mkdir(dst.fileSystemRepresentation, 0700))
-                failure = @"Could not create a local destination folder. Existing items are never replaced.";
+            NSDictionary *existing =
+                self.onFileConflict ? (upload ? [self remoteAttributes:dst] : [self localAttributes:dst]) : nil;
+            if (![existing[@"directory"] boolValue]) {
+                if (upload)
+                    failure = [self makeRemoteDirectory:dst];
+                else if (mkdir(dst.fileSystemRepresentation, 0700))
+                    failure = @"Could not create a local destination folder. Existing items are never replaced.";
+            }
         } else {
             NSDictionary *leaf = [self performFileRequest:@{
                 @"id" : requestID,

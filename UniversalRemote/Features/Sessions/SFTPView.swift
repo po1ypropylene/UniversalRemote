@@ -33,7 +33,7 @@ struct SFTPView: View {
                         .disabled(controller.cancelling)
                         .help("Stops file work and keeps the SSH terminal connected.")
                 }
-                Text("Existing files are never replaced").foregroundStyle(.secondary)
+                Text("Ask before overwriting files").foregroundStyle(.secondary)
             }.font(.caption).padding(10).background(.bar)
         }
         .onAppear {
@@ -92,7 +92,19 @@ struct SFTPView: View {
             }
             Button("Cancel", role: .cancel) { moveDestination = nil }
         } message: {
-            Text("Moves remove items from their original folder. Existing destination items are never replaced.")
+            Text("Moves remove items from their original folder. Transfers ask before overwriting destination files.")
+        }
+        .alert(
+            "A file named “\(controller.conflict?.name ?? "")” already exists.",
+            isPresented: Binding(get: { controller.conflict != nil }, set: { _ in })
+        ) {
+            Button("Stop Transfer", role: .cancel) { controller.resolveConflict(overwrite: false) }
+            Button("Overwrite", role: .destructive) { controller.resolveConflict(overwrite: true) }
+            Button("Overwrite All", role: .destructive) { controller.resolveConflict(overwrite: true, all: true) }
+        } message: {
+            Text(
+                "Replace this file, replace all conflicting files in the remaining transfer, or stop the entire transfer. Completed files stay completed."
+            )
         }
         .alert(
             "File transfer",

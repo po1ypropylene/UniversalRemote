@@ -372,3 +372,94 @@ validation cycle, and credential deletion against a real macOS Keychain were not
 exercised. License notices require upstream review when applying an upgrade.
 Permission/authorization failures in a real reset can leave a partial deletion and
 are reported as failures; rerun after resolving access.
+
+## Read-only module-cache cleanup — 9 October 2026
+
+- Confirmed the reported leftover gVisor module directory was owned by the current
+  user with mode 555. Plain recursive deletion could not remove its contents.
+- Project cleanup now restores owner read/write/search permissions on owned
+  generated directories before deletion. It does not chmod files, including
+  hard-linked files, or follow symbolic links outside the generated tree.
+- Ten maintenance checks passed, including new nested read-only Go cache removal
+  and unchanged external symlink-target/hard-linked-file permissions.
+- Reran project cleanup successfully on the actual remaining 4.8 GiB build tree
+  and generated native output. Verified both `.build` and `Vendor/Native` absent.
+  Source fixtures, protected local input and Library/Keychain data were not removed.
+- Repository hygiene and whitespace checks passed. No app/protocol rebuild was
+  needed for this maintenance fix; generated dependencies must be rebuilt for
+  subsequent app development. No commit/publication was performed.
+
+## Dependency selection and preservation correction — 9 October 2026
+
+This supersedes the earlier cleanup scope that removed all of `.build` and
+`Vendor/Native`. Cleanup now retains dependency sources/native build trees,
+installed native libraries/helper, Go module/build caches, Swift package downloads
+and the Python test environment. Only disposable app/compiler/test outputs are
+removed; a substantial `.build` directory after cleanup is expected.
+
+- Verified upstream SwiftTerm tags: newer releases use `v` prefixes while older
+  tags include bare version numbers. The old discovery excluded the prefixed tags
+  and incorrectly selected 1.5.0 from a 1.20.0 starting pin.
+- Tag parsing now accepts bare/v/V tags, compares numeric semantic-version tuples,
+  rejects downgrades and ambiguous tags, and continues peeling annotated tags.
+  Failed package-resolution stdout is retained in the error output.
+- Twelve maintenance checks passed, including actual 1.5/1.9/1.20 ordering,
+  prefixed/annotated tags, automatic and explicit downgrade refusal, and cleanup
+  preservation of every declared dependency location with deletion of test/app outputs.
+- Used the corrected updater to restore SwiftTerm 1.20.0, resolving its original
+  upstream commit and package lock successfully. Other pre-existing update changes
+  were retained. Native library and helper outputs are present.
+- Release build succeeded with the restored pin. Final bundle checks passed macOS
+  27/arm64, six native libraries, signatures, loader and sandboxed WireGuard helper.
+  Repository hygiene and diff whitespace checks passed.
+
+The supplied failure extract contained the failed-command summary without the
+compiler's specific error diagnostic. The successful restored build establishes
+recovery; no additional new-version compatibility or live-server test is claimed.
+The revised cleanup was exercised in disposable trees, leaving the recovered app
+available. Protected test input and user Library/Keychain data were not reset.
+No commit or publication was performed.
+
+
+## Settings version, transfer conflicts and upload refinement — 9 October 2026
+
+- Settings reads the built CFBundleShortVersionString; the verified Release plist
+  contains 1.1.0, matching Version.xcconfig. No separate literal version remains
+  in Settings. The final Release build passed bundle signatures, macOS 27/arm64,
+  six-library dependency closure, pre-UI loader and sandboxed WireGuard helper checks.
+- Sixty-seven synthetic SFTP checks passed. Nineteen conflict checks cover individual
+  upload/download overwrites, nested files and existing folder merges, Overwrite All
+  across batch jobs and reset on the next batch, Stop Transfer retaining completed
+  files and the SSH connection, continued terminal input while waiting, destination
+  link refusal, disconnect clearing the prompt, cancellation during an overwrite
+  preserving the original, unsupported atomic replacement retaining original bytes,
+  and local/remote staging cleanup. Existing no-callback collision/race, shared-login
+  cancellation, recursive actions and drag-provider regression checks also passed.
+- An isolated AppKit/SwiftUI review executable hosted the actual controller and
+  SFTPView against an owned loopback fixture and disposable files. Visually inspected
+  the native dialog and its three buttons; clicked Overwrite, Stop Transfer and
+  Overwrite All. The pane returned to usable state; Stop displayed Cancelled.
+  Independently verified the overwritten remote bytes. Closed the preview and fixture.
+  This preview ran outside App Sandbox and did not load the user database/credentials.
+- A controlled proxy delayed traffic by 10 ms in each direction. Three 16 MiB uploads
+  per variant used varied deterministic binary bytes, separate authenticated fixture
+  sessions and otherwise identical adapter code. Median throughput was 31.010 MiB/s
+  for draining 1 MiB windows, 40.950 MiB/s for draining 4 MiB windows and 50.358 MiB/s
+  for the final refilled 4 MiB window: 62.4% above the 1 MiB baseline. All nine remote
+  files matched the source byte for byte. These are controlled fixture measurements,
+  not production-server throughput. Earlier exploratory samples varied with concurrent
+  builds; the final verification used fresh fixture files after excluding stale data.
+- Seventeen core, seven SSH, four RDP TLS, five RDP NLA and four protected-probe
+  fixture checks passed. The first concurrent TLS/NLA launch contended for their
+  shared fixed port/output directory; the TLS suite passed when rerun sequentially.
+  Pinned native dependency preparation, Swift/Objective-C formatting, repository
+  hygiene, shell syntax and diff whitespace checks passed.
+
+Upload overwrites require the server's posix-rename@openssh.com extension. A refused
+rename reports an error and keeps the original; interrupted connections can retain
+remote staging files. Cancel may finish up to the submitted 4 MiB upload window.
+Regular file conflicts are supported; links and file/folder type mismatches are
+refused. Same-side local copy/move and rename still refuse existing destinations.
+Concurrent remote writers, prolonged/high-latency production sessions and real-server
+throughput remain unverified. No private server input, user clipboard, real remote
+files or saved credentials/database were accessed; no commit or publication occurred.

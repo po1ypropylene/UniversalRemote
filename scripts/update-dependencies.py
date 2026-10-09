@@ -22,7 +22,19 @@ SWIFT_URL = 'https://github.com/migueldeicaza/SwiftTerm'
 
 
 def run(arguments, cwd=ROOT, env=None):
-    return subprocess.check_output(arguments, cwd=cwd, env=env, text=True).strip()
+    try:
+        return subprocess.check_output(arguments, cwd=cwd, env=env, text=True).strip()
+    except subprocess.CalledProcessError as error:
+        # Preserve resolver diagnostics so failures do not show only an exit code.
+        if error.output:
+            print(error.output)
+        raise
+
+
+def semantic_version(version):
+    if not re.fullmatch(r'\d+\.\d+\.\d+', version):
+        raise RuntimeError('Native/SwiftTerm versions must be stable x.y.z releases.')
+    return tuple(map(int, version.split('.')))
 
 
 def tag_pin(url, prefix, version, current):
@@ -30,23 +42,30 @@ def tag_pin(url, prefix, version, current):
     for line in run(['git', 'ls-remote', '--tags', url]).splitlines():
         revision, ref = line.split('\t')
         refs[ref.removeprefix('refs/tags/')] = revision
+    releases = {}
+    for tag in refs:
+        if tag.endswith('^{}') or not tag.startswith(prefix):
+            continue
+        number = tag[len(prefix):]
+        if not prefix:
+            number = number.removeprefix('v').removeprefix('V')
+        if not re.fullmatch(r'\d+\.\d+\.\d+', number):
+            continue
+        commit = refs.get(tag + '^{}', refs[tag])
+        if number in releases and releases[number] != commit:
+            raise RuntimeError(f'Ambiguous upstream tags for release {number}.')
+        releases[number] = commit
     if version == 'latest':
-        # Keep the existing major ABI; skip preview tags and unrelated release branches.
-        major = current.split('.')[0]
-        versions = [name[len(prefix):] for name in refs
-                    if name.startswith(prefix) and
-                    re.fullmatch(r'\d+\.\d+\.\d+', name[len(prefix):]) and
-                    name[len(prefix):].split('.')[0] == major]
+        versions = [number for number in releases
+                    if semantic_version(number)[0] == semantic_version(current)[0]]
         if not versions:
             raise RuntimeError('No stable release tags found in the current major version.')
-        version = max(versions, key=lambda item: tuple(map(int, item.split('.'))))
-    if not re.fullmatch(r'\d+\.\d+\.\d+', version):
-        raise RuntimeError('Native/SwiftTerm versions must be stable x.y.z releases.')
-    tag = prefix + version
-    if tag not in refs:
-        raise RuntimeError(f'Upstream release tag not found: {tag}')
-    # Annotated tags must be pinned to the peeled commit, not the tag object.
-    return version, refs.get(tag + '^{}', refs[tag])
+        version = max(versions, key=semantic_version)
+    if semantic_version(version) < semantic_version(current):
+        raise RuntimeError(f'Refusing dependency downgrade from {current} to {version}.')
+    if version not in releases:
+        raise RuntimeError(f'Upstream release tag not found: {prefix}{version}')
+    return version, releases[version]
 
 
 def main():
@@ -118,7 +137,14 @@ def main():
     spec = importlib.util.spec_from_file_location('clean_project', ROOT / 'scripts/clean-project.py')
     cleaner = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cleaner)
-    cleaner.targets(ROOT)
+    invalidated = []
+    if updated_native:
+        invalidated = [ROOT / relative for relative in (
+            '.build/dependencies', '.build/openssl', '.build/libssh2', '.build/freerdp',
+            '.build/rdp-fixture-source', '.build/rdp-fixture', 'Vendor/Native')]
+    elif wg_version:
+        invalidated = [ROOT / 'Vendor/Native/bin/UniversalRemoteWireGuard']
+    cleaner.validate_targets(ROOT, invalidated)
     files = [PREPARE, PROJECT, RESOLVED, GO / 'go.mod', GO / 'go.sum',
              ROOT / 'ThirdParty/README.md', ROOT / 'ThirdParty/WireGuard-build-modules.txt']
     if any(path.is_symlink() for path in files):
@@ -160,12 +186,8 @@ def main():
         print('Pin/manifest changes rolled back; downloaded caches may remain.')
         raise
     # Force regeneration; otherwise build.sh could reuse libraries from the old pins.
-    if updated_native:
-        for relative in ('.build/dependencies', '.build/openssl', '.build/libssh2', '.build/freerdp',
-                         '.build/rdp-fixture-source', '.build/rdp-fixture', 'Vendor/Native'):
-            cleaner.remove(ROOT / relative)
-    elif wg_version:
-        cleaner.remove(ROOT / 'Vendor/Native/bin/UniversalRemoteWireGuard')
+    for path in invalidated:
+        cleaner.remove(path)
     print('Pins updated. Review the diff and upstream license/NOTICE changes in ThirdParty before distribution.')
     print('Run scripts/build.sh and the verification commands in AGENTS.md. No compatibility pass is implied.')
     if args.build:

@@ -16,6 +16,9 @@ NS_ASSUME_NONNULL_BEGIN
     (NSString *requestID, NSDictionary *result, NSString *_Nullable error);
 @property(nonatomic, copy, nullable) void (^onFileProgress)
     (NSString *requestID, unsigned long long bytes, unsigned long long total);
+// Conflict callbacks run on the worker. Resolve the unique token: 0 stops, 1 overwrites.
+@property(nonatomic, copy, nullable) void (^onFileConflict)(NSString *token, NSString *name);
+- (void)resolveFileConflict:(NSString *)token overwrite:(BOOL)overwrite;
 - (void)listDirectory:(NSString *)path requestID:(NSString *)requestID;
 - (void)transferLocalPath:(NSString *)localPath
                remotePath:(NSString *)remotePath

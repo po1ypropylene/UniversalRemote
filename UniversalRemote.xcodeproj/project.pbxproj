@@ -125,7 +125,7 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-        A10000000000000000000003 /* SwiftTerm */ = {isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/migueldeicaza/SwiftTerm"; requirement = {kind = exactVersion; version = 1.20.0; }; };
+        A10000000000000000000003 /* SwiftTerm */ = {isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/migueldeicaza/SwiftTerm"; requirement = {kind = exactVersion; version = 1.99.0; }; };
 /* End XCRemoteSwiftPackageReference section */
 /* Begin XCSwiftPackageProductDependency section */
         A10000000000000000000002 /* SwiftTerm */ = {isa = XCSwiftPackageProductDependency; package = A10000000000000000000003; productName = SwiftTerm; };

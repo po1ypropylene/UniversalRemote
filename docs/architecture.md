@@ -55,7 +55,7 @@ Version.xcconfig is the sole version/build source, referenced by both Xcode targ
 
 ## Deliberately deferred
 
-SCP/WebDAV; SFTP overwrite/merge/resume/Finder download promises; SSH config/agent/jump hosts/forwarding/certificates/hardware keys; RDP Gateway/RemoteApp/microphone capture/devices/drive redirection/multiple monitors/hardware video; nested folders/cloud sync/updater. The source license is undecided. Production interoperability and distribution are not claimed by synthetic fixture passes.
+SCP/WebDAV; SFTP resume/Finder download promises; SSH config/agent/jump hosts/forwarding/certificates/hardware keys; RDP Gateway/RemoteApp/microphone capture/devices/drive redirection/multiple monitors/hardware video; nested folders/cloud sync/updater. The source license is undecided. Production interoperability and distribution are not claimed by synthetic fixture passes.
 
 ## Connection editor and desktop negotiation — 8 October 2026
 
@@ -267,11 +267,11 @@ only the matching session's captured source paths can produce jobs. Multiple sel
 rows share a token. No clipboard is read and dropped text is not interpreted as
 paths. Finder file-URL providers load through loadObject, with scoped access and
 provider lifetimes retained until completion. Drop jobs reuse recursive validation,
-no-overwrite rules and the batch queue. They always copy; cancellation/disconnect
+destination conflict policy and the batch queue. They always copy; cancellation/disconnect
 invalidates late provider callbacks. Downloads directly to Finder need file promises
 and remain deferred.
 
-Uploads use a bounded 1 MiB application window, allowing pinned libssh2 to pipeline
+Uploads use a bounded 4 MiB application window, allowing pinned libssh2 to pipeline
 its smaller SFTP WRITE packets; downloads use 256 KiB windows. TCP_NODELAY avoids
 small-packet delays. Readiness directions are captured before servicing the shell,
 since terminal reads can change libssh2's last-operation directions; polling uses
@@ -297,10 +297,54 @@ accidental native ABI changes; explicit versions remain available. WireGuard's
 transitive graph is resolved together rather than replacing gVisor independently.
 Upstream notices still require review before distribution.
 
-Project cleanup is limited to known generated directories and ignored untracked
-logs/caches. Tracked fixture sources and protected local test input are preserved.
+Project cleanup selects disposable outputs within generated directories and ignored
+untracked logs/caches. Native installed libraries/source/build trees, Go dependency
+and build caches, Swift package downloads and the test virtual environment are
+preserved. `.build` is retained. Tracked fixture sources and protected local test
+input are preserved. The updater recognizes bare/v/V release tags, compares numeric
+major/minor/patch tuples and rejects dependency downgrades.
 User-data reset is a separate explicit destructive operation, scoped to the current
 bundle's Library storage and generic-password credential service. It calls
 SecItemDelete without fetching credential values, refuses a running app/helper or
 sudo, and rejects redirected storage paths. Defaults are cleared through the
 preferences service before disk cleanup. No app schema/storage changes are made.
+
+
+## Transfer conflicts, upload queue and Settings version — 9 October 2026
+
+Settings reads CFBundleShortVersionString from the built app, which Xcode derives
+from Version.xcconfig. There is no second hard-coded version value.
+
+Cross-side transfers merge existing real directories and ask before replacing each
+regular file, including recursive leaves. Stop cancels all remaining jobs; Overwrite
+approves one file; Overwrite All is controller state scoped to one batch and resets
+before the next batch. Local-to-local copy/move and rename retain their exclusive
+publication policy. Native callers without a conflict callback retain no-overwrite
+behavior. Server-to-server copies use the same upload conflict mechanism.
+
+The SSH worker emits a unique conflict token and filename, then continues pumping
+the terminal while waiting for a lock-protected, single-use response. There is no
+network-progress timeout while waiting for the user; the transfer deadline resets
+after approval. Cancellation/disconnect interrupts the wait; the main-actor callback
+checks client identity, busy state and cancellation. Closing the session clears its
+prompt. Existing destination links and special files are refused rather than followed.
+
+Overwrite downloads fsync a unique sibling file and rename it over the destination
+only after the read/handle close succeed. Overwrite uploads use exclusive sibling
+staging and posix-rename@openssh.com after successful transfer/close. Servers lacking
+that capability fail with the original retained; no delete-then-rename or in-place
+truncation fallback is used. Failed/cancelled overwrite uploads attempt staging
+cleanup; disconnected servers may retain a temporary file. As with other SFTP work,
+concurrent writers/parent-directory changes are outside transactional guarantees.
+New destination uploads retain exclusive creation and may leave a partial file.
+
+The upload window is now 4 MiB and refills after positive acknowledgements when at
+least 256 KiB has been consumed. Unacknowledged bytes remain identical; EAGAIN retries
+retain their buffer/length. This follows [libssh2's write-ahead contract](https://libssh2.org/libssh2_sftp_write.html). Terminal
+pumping and throttled progress run during refills as well as socket waits. Cancel
+stops refilling, drains the bounded submitted window, closes the handle, then stops
+the batch. Downloads retain their 256 KiB window. No extra SSH login or SFTP channel
+is created. Controlled comparisons and limits are recorded in validation.md.
+
+The original no-overwrite and 1 MiB descriptions above document earlier stages;
+this section supersedes those transfer policies.

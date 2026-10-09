@@ -8,7 +8,7 @@ import threading
 import time
 from pathlib import Path
 import paramiko
-from sftp_fixture import Files
+from sftp_fixture import Files, FixtureSFTPServer
 
 root = Path(sys.argv[1]); root.mkdir(parents=True, exist_ok=True)
 host_key = paramiko.RSAKey.generate(2048)
@@ -42,7 +42,7 @@ class Server(paramiko.ServerInterface):
 def serve(sock):
     transport = paramiko.Transport(sock); transport.add_server_key(host_key); server = Server()
     if len(sys.argv) < 3 or sys.argv[2] != 'no-sftp':
-        transport.set_subsystem_handler('sftp', paramiko.SFTPServer, Files, root=root)
+        transport.set_subsystem_handler('sftp', FixtureSFTPServer, Files, root=root)
     try:
         transport.start_server(server=server)
         channel = transport.accept(15)

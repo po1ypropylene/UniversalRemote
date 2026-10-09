@@ -29,6 +29,9 @@ done
 xcrun swiftc -parse-as-library -target arm64-apple-macos27.0 -import-objc-header UniversalRemote/Native/SSH/SSHClient.h UniversalRemote/Features/Sessions/SFTPController.swift Tests/Integration/SSH/sftp_drop_operations.swift .build/sftp-fixture/native.o -L Vendor/Native/lib -lssh2 -Xlinker -rpath -Xlinker "$PWD/Vendor/Native/lib" -o .build/sftp-fixture/drop-client
 .build/sftp-fixture/drop-client "$fixture_port" "$PWD/.build/sftp-fixture" "$PWD/.build/sftp-fixture/fingerprint"
 
+xcrun swiftc -parse-as-library -target arm64-apple-macos27.0 -import-objc-header UniversalRemote/Native/SSH/SSHClient.h UniversalRemote/Features/Sessions/SFTPController.swift Tests/Integration/SSH/sftp_conflicts.swift .build/sftp-fixture/native.o -L Vendor/Native/lib -lssh2 -Xlinker -rpath -Xlinker "$PWD/Vendor/Native/lib" -o .build/sftp-fixture/conflict-client
+.build/sftp-fixture/conflict-client "$fixture_port" "$PWD/.build/sftp-fixture" "$PWD/.build/sftp-fixture/fingerprint"
+
 kill "$fixture_pid" 2>/dev/null || true
 wait "$fixture_pid" 2>/dev/null || true
 rm -f .build/sftp-fixture/port

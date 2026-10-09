@@ -107,17 +107,22 @@ The server must allow both an interactive SSH shell and its SFTP subsystem.
   a server file downloads a snapshot into the app's temporary previews folder, then
   opens it locally. Edits are not uploaded automatically. Previews remain temporary
   local files until macOS removes them; do not rely on them for saved work.
-- Existing destination files and folders are never replaced or merged. File
-  downloads/local copies appear with their final name only after completion;
-  failed file copies remove their temporary file. Failed folder operations may
-  leave completed files or partial folders at the destination. Refresh to inspect.
+- Upload/download file conflicts offer **Stop Transfer**, **Overwrite**, or
+  **Overwrite All** for the remaining batch. Matching folders merge their contents;
+  each conflicting regular file follows the chosen policy. Links and file/folder
+  type mismatches are refused. Completed items remain if you stop the batch.
+  Downloads publish atomically after completion; upload overwrites retain the old
+  file until an atomic server rename succeeds (requires the OpenSSH POSIX rename
+  extension). Unsupported servers retain the original and report an error.
+  Same-side local copies and renames still refuse existing destinations.
+  Failed folder operations may leave completed files or partial folders. Refresh to inspect.
 - Drag selected local files/folders onto the server list to upload; drag server
   items onto the local list to download. Folder rows are destinations; dropping on
   the list background uses the displayed folder. Finder files/folders can also be
   dropped onto the server panel. Dragging copies items and does not remove sources.
 - **Cancel** stops current file work and the remaining batch while retaining the
   SSH terminal/login. A pending network request drains before its file handle closes;
-  up to the current 1 MiB upload window may finish. Interrupted uploads and recursive
+  up to the current 4 MiB upload window may finish. Interrupted uploads and recursive
   batches can leave partial destinations. Closing the tab disconnects everything.
   Completed rename/Trash actions cannot be undone by cancellation.
 
@@ -127,7 +132,7 @@ that tree's destination or removing its sources. Tree operations are limited to
 20,000 items and 64 folder levels; remote listings require UTF-8 names and file-type
 attributes. Server-to-server copies stream through a temporary local tree and need
 sufficient local disk space. Local file publication requires hard-link support.
-Overwrite/merge, resume, dragging server files directly into Finder, and SFTP-only accounts remain unsupported.
+Resume, dragging server files directly into Finder, and SFTP-only accounts remain unsupported.
 File operation stalls disconnect SSH after 30 seconds without transfer progress;
 the terminal remains usable during normal transfers. Real-server SFTP interoperability
 remains unverified.
@@ -229,6 +234,8 @@ scripts/clean-user-data.py --apply
 The updater writes native commit pins, SwiftTerm's exact requirement and resolved
 package lock, WireGuard's Go manifest/checksums, and the third-party version inventory.
 It resolves WireGuard's dependency graph without independently upgrading gVisor.
+Stable native/SwiftTerm versions are compared numerically by major, minor and patch;
+SwiftTerm tags with `v`/`V` prefixes are recognized. Downgrades are rejected.
 Pin/manifest resolution failures restore the original tracked file contents;
 downloaded caches may remain. Successfully applied pins remain if a subsequent
 build fails. Old native outputs and synthetic RDP builds are invalidated when
@@ -237,11 +244,16 @@ refresh the bundled notices in `ThirdParty` as needed, then run the verification
 commands in AGENTS.md before relying on new versions. The updater does not install
 or upgrade Xcode, CMake, Python, Go, or test-only Paramiko.
 
-Project cleanup removes `.build` (including built apps, release DMGs and generated
-fixtures), `Vendor/Native`, `DerivedData`, `build`, and untracked ignored logs/Python
-caches. It preserves tracked source fixtures, `.local-testing`, and user Library and
-Keychain data. Stop builds and fixture servers before cleaning. Rebuild with
-`scripts/build.sh`; recreate the test virtual environment and RDP fixture when needed.
+Project cleanup removes app/compiler outputs, release DMGs, generated test fixtures
+and ignored untracked logs/Python caches. It **preserves dependencies**: `Vendor/Native`,
+native source checkouts and build trees, WireGuard's Go module/build caches,
+Xcode's `SourcePackages`, core-test package downloads, and the test virtual environment.
+Consequently `.build` remains and can still occupy substantial space after cleanup.
+It restores owner access only on directories selected for deletion; file permissions
+and external symbolic-link targets are unchanged. Tracked source fixtures,
+`.local-testing` and user Library/Keychain data are preserved. Stop builds and fixture
+servers before cleaning. Rebuild the app with `scripts/build.sh`; recreate generated
+RDP fixtures when needed. Cleanup never changes dependency pins or installed libraries.
 
 User-data cleanup permanently removes this account's Universal Remote container,
 local credential fallback, preferences, cached/saved state and temporary SFTP previews.

@@ -6,6 +6,13 @@ import tempfile
 import time
 import paramiko
 
+class FixtureSFTPServer(paramiko.SFTPServer):
+    def _send_packet(self, packet_type, packet):
+        if packet_type == paramiko.sftp.CMD_VERSION:
+            packet.add_string('posix-rename@openssh.com')
+            packet.add_string('1')
+        return super()._send_packet(packet_type, packet)
+
 class Files(paramiko.SFTPServerInterface):
     def __init__(self, server, *args, root, **kwargs):
         super().__init__(server, *args, **kwargs)
@@ -54,6 +61,12 @@ class Files(paramiko.SFTPServerInterface):
             self.path(oldpath).rename(destination)
             return paramiko.SFTP_OK
         except OSError as error: return paramiko.SFTPServer.convert_errno(error.errno)
+    def posix_rename(self, oldpath, newpath):
+        if newpath.endswith('/no-atomic.bin'): return paramiko.SFTP_OP_UNSUPPORTED
+        try:
+            self.path(oldpath).replace(self.path(newpath))
+            return paramiko.SFTP_OK
+        except OSError as error: return paramiko.SFTPServer.convert_errno(error.errno)
     def open(self, path, flags, attr):
         try:
             file = self.path(path)
@@ -62,7 +75,7 @@ class Files(paramiko.SFTPServerInterface):
             class Handle(paramiko.SFTPHandle):
                 def stat(self): return paramiko.SFTPAttributes.from_stat(os.fstat(stream.fileno()))
                 def write(self, offset, data):
-                    if file.name == 'slow-upload.bin': time.sleep(0.003)
+                    if file.name == 'slow-upload.bin' or file.name.startswith('.universalremote-transfer-'): time.sleep(0.003)
                     return super().write(offset, data)
                 def read(self, offset, length):
                     if file.name == 'mutating.bin' and not getattr(self, 'touched', False):

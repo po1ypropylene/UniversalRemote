@@ -19,7 +19,9 @@ struct AppSettings: View {
                 .caption
             ).foregroundStyle(.secondary)
             LabeledContent("Protocols", value: "SSH · RDP")
-            LabeledContent("Version", value: "0.1.0")
+            LabeledContent(
+                "Version",
+                value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown")
         }.formStyle(.grouped).frame(width: 440, height: 240).padding(16)
     }
 }

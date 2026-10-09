@@ -7,7 +7,16 @@ int main(int argc, char **argv) {
         NSString *root = @(argv[2]);
         NSString *pin = [NSString stringWithContentsOfFile:@(argv[3]) encoding:NSUTF8StringEncoding error:nil];
         NSString *path = [root stringByAppendingPathComponent:@"throughput-source"];
-        [[NSMutableData dataWithLength:16 * 1024 * 1024] writeToFile:path atomically:YES];
+        NSMutableData *source = [NSMutableData dataWithLength:16 * 1024 * 1024];
+        uint8_t *bytes = source.mutableBytes;
+        uint32_t state = 0x13579bdf;
+        for (NSUInteger i = 0; i < source.length; i++) {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            bytes[i] = state & 255;
+        }
+        [source writeToFile:path atomically:YES];
         URSSHClient *client = [URSSHClient new];
         dispatch_semaphore_t ready = dispatch_semaphore_create(0), done = dispatch_semaphore_create(0);
         dispatch_semaphore_t finished = dispatch_semaphore_create(0);

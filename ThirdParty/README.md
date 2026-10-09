@@ -5,7 +5,7 @@
 | FreeRDP / WinPR | 3.32.1 | Apache-2.0 | https://github.com/FreeRDP/FreeRDP |
 | libssh2 | 1.11.1 | BSD-3-Clause | https://github.com/libssh2/libssh2 |
 | OpenSSL | 3.6.5 | Apache-2.0 | https://github.com/openssl/openssl |
-| SwiftTerm | 1.20.0 | MIT | https://github.com/migueldeicaza/SwiftTerm |
+| SwiftTerm | 1.99.0 | MIT | https://github.com/migueldeicaza/SwiftTerm |
 
 The adjacent files contain upstream license texts. SwiftTerm is resolved through
 Swift Package Manager; the others are built from pinned source revisions by
@@ -19,8 +19,8 @@ are also included below. Test-only Paramiko is not included in the application.
 
 | Component | Pinned revision/version | License |
 |---|---|---|
-| wireguard-go | `2631ce99a06f27120d581611cf125d68bc6aa565` | MIT |
-| gVisor netstack | `39ed1f5ac29c` (3 May 2025 Go module) | Apache-2.0 |
+| wireguard-go | v0.0.0-20261006164505-2631ce99a06f | MIT |
+| gVisor netstack | v0.0.0-20250503011706-39ed1f5ac29c | Apache-2.0 |
 | Go runtime/toolchain | 1.27.1 used for validation | BSD-3-Clause |
 | golang.org/x/crypto | v0.37.0 | BSD-3-Clause |
 | golang.org/x/net | v0.39.0 | BSD-3-Clause |

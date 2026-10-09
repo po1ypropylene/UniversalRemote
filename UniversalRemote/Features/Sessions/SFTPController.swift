@@ -48,6 +48,11 @@ private struct FileJob: Sendable {
     var cutSource: String?
 }
 
+struct FileConflict: Identifiable {
+    let id: String
+    let name: String
+}
+
 private struct FileBuffer {
     let local: Bool
     var sources: [String]
@@ -66,6 +71,8 @@ private struct FileBuffer {
     @Published var message = "Choose Files or Split to browse this server."
     @Published var progress: Double?
     @Published var error: String?
+    @Published private(set) var conflict: FileConflict?
+    private var overwriteAll = false
     @Published private(set) var bufferedCount = 0
     private weak var client: URSSHClient?
     private var requestID: String?
@@ -127,6 +134,7 @@ private struct FileBuffer {
     func cancel() {
         guard busy, !cancelling else { return }
         cancelling = true
+        conflict = nil
         jobs = []
         message = "Cancelling…"
         if activeJob == nil && !dropProviders.isEmpty {
@@ -147,6 +155,21 @@ private struct FileBuffer {
 
     func attach(_ client: URSSHClient) {
         self.client = client
+        conflict = nil
+        overwriteAll = false
+        client.onFileConflict = { [weak self, weak client] token, name in
+            DispatchQueue.main.async {
+                guard let self, let client, self.client === client, self.busy, !self.cancelling else {
+                    client?.resolveFileConflict(token, overwrite: false)
+                    return
+                }
+                if self.overwriteAll {
+                    client.resolveFileConflict(token, overwrite: true)
+                } else {
+                    self.conflict = FileConflict(id: token, name: name)
+                }
+            }
+        }
         requested = false
         requestID = nil
         busy = false
@@ -155,6 +178,13 @@ private struct FileBuffer {
         remoteFiles = []
         remotePath = "."
         message = "Choose Files or Split to browse this server."
+    }
+    func resolveConflict(overwrite: Bool, all: Bool = false) {
+        guard let conflict else { return }
+        self.conflict = nil
+        if all && overwrite { overwriteAll = true }
+        client?.resolveFileConflict(conflict.id, overwrite: overwrite)
+        if !overwrite { cancel() }
     }
     func showFiles() {
         guard !requested, !busy else { return }
@@ -240,6 +270,8 @@ private struct FileBuffer {
     }
     func disconnected() {
         localWork.cancel()
+        conflict = nil
+        overwriteAll = false
         dropAttempt = UUID()
         cancelling = false
         dragToken = nil
@@ -444,6 +476,8 @@ private struct FileBuffer {
     private func run(_ work: [FileJob]) {
         guard !busy, !work.isEmpty, work.allSatisfy({ $0.local || client != nil }) else { return }
         localWork = FileWorkCancellation()
+        overwriteAll = false
+        conflict = nil
         jobs = work
         batchCount = work.count
         completed = 0
