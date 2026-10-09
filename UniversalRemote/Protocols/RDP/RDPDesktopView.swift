@@ -33,6 +33,36 @@ final class RDPDesktopView: MTKView, MTKViewDelegate, NSTextInputClient {
     var sendPointer: ((Int, Int, Int) -> Void)?
     var resizeRemote: ((Int, Int, Int) -> Void)?
     var inputEnabled = false
+    var displayMode = RDPDisplayMode.fit
+    weak var viewport: RDPViewport?
+    private var initialSizeReady: ((CGSize) -> Void)?
+    func setDesktopSize(_ size: CGSize) {
+        frameSize = size
+        viewport?.layoutDesktop()
+    }
+    func withInitialSize(width: Int, height: Int, completion: @escaping (CGSize) -> Void) {
+        if displayMode != .matchWindow {
+            completion(CGSize(width: width, height: height))
+        } else {
+            initialSizeReady = completion
+            viewport?.prepareInitialSize()
+        }
+    }
+    func cancelPendingDisplayWork() {
+        initialSizeReady = nil
+        resizeTask?.cancel()
+    }
+    var awaitsInitialSize: Bool { initialSizeReady != nil }
+    func viewportDidLayout(_ size: CGSize) {
+        guard size.width > 0, size.height > 0, let completion = initialSizeReady else { return }
+        initialSizeReady = nil
+        let initial = CGSize(
+            width: min(8192, max(200, size.width.rounded(.down))),
+            height: min(8192, max(200, size.height.rounded(.down))))
+        setDesktopSize(initial)
+        completion(initial)
+    }
+    var desktopSize: CGSize { frameSize }
     private var texture: MTLTexture?
     private var pipeline: MTLRenderPipelineState?
     private var queue: MTLCommandQueue?
@@ -118,7 +148,7 @@ final class RDPDesktopView: MTKView, MTKViewDelegate, NSTextInputClient {
                 descriptor.usage = .shaderRead
                 descriptor.storageMode = .shared
                 texture = device.makeTexture(descriptor: descriptor)
-                frameSize = CGSize(width: frame.width, height: frame.height)
+                setDesktopSize(CGSize(width: frame.width, height: frame.height))
             }
             frame.pixels.withUnsafeBytes { bytes in
                 if let base = bytes.baseAddress {
@@ -145,7 +175,10 @@ final class RDPDesktopView: MTKView, MTKViewDelegate, NSTextInputClient {
         buffer.commit()
     }
     private func displayRect(in size: CGSize) -> CGRect {
-        let factor = min(size.width / frameSize.width, size.height / frameSize.height)
+        let factor =
+            displayMode == .fit
+            ? min(size.width / frameSize.width, size.height / frameSize.height)
+            : size.width / max(1, bounds.width)
         let width = frameSize.width * factor
         let height = frameSize.height * factor
         return CGRect(x: (size.width - width) / 2, y: (size.height - height) / 2, width: width, height: height)
@@ -153,6 +186,7 @@ final class RDPDesktopView: MTKView, MTKViewDelegate, NSTextInputClient {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) { requestResize() }
     func requestResize() {
         resizeTask?.cancel()
+        guard displayMode == .fit else { return }
         let task = DispatchWorkItem { [weak self] in
             guard let self, self.inputEnabled, self.bounds.width > 0, self.bounds.height > 0 else { return }
             let factor = self.window?.backingScaleFactor ?? 1
@@ -215,6 +249,10 @@ final class RDPDesktopView: MTKView, MTKViewDelegate, NSTextInputClient {
     override func rightMouseDragged(with event: NSEvent) { pointer(event, flags: 0x0800) }
     override func otherMouseDragged(with event: NSEvent) { pointer(event, flags: 0x0800) }
     override func scrollWheel(with event: NSEvent) {
+        if displayMode != .fit, event.modifierFlags.contains(.option) {
+            viewport?.scrollWheel(with: event)
+            return
+        }
         scrollRemainder += Double(event.scrollingDeltaY) * (event.hasPreciseScrollingDeltas ? 3 : 120)
         let delta = min(240, max(-240, Int(scrollRemainder)))
         if abs(delta) < 8 { return }
@@ -324,8 +362,67 @@ final class RDPDesktopView: MTKView, MTKViewDelegate, NSTextInputClient {
     }
     func characterIndex(for point: NSPoint) -> Int { 0 }
 }
+/// The Metal surface remains session-owned; the scroll view only clips and positions it.
+final class RDPViewport: NSScrollView {
+    let desktop: RDPDesktopView
+    private var layingOut = false
+    init(desktop: RDPDesktopView) {
+        self.desktop = desktop
+        super.init(frame: .zero)
+        borderType = .noBorder
+        drawsBackground = true
+        backgroundColor = NSColor(calibratedRed: 0.035, green: 0.045, blue: 0.065, alpha: 1)
+        scrollerStyle = .overlay
+        hasHorizontalScroller = desktop.displayMode != .fit
+        hasVerticalScroller = desktop.displayMode != .fit
+        autohidesScrollers = true
+        documentView = desktop
+        desktop.viewport = self
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func layout() {
+        super.layout()
+        layoutDesktop()
+    }
+    func prepareInitialSize() {
+        hasHorizontalScroller = false
+        hasVerticalScroller = false
+        tile()
+        layoutDesktop()
+    }
+    func layoutDesktop() {
+        guard !layingOut else { return }
+        layingOut = true
+        defer { layingOut = false }
+        if desktop.awaitsInitialSize || desktop.displayMode == .fit {
+            hasHorizontalScroller = false
+            hasVerticalScroller = false
+        }
+        tile()
+        let available = contentView.bounds.size
+        guard available.width > 0, available.height > 0 else { return }
+        desktop.viewportDidLayout(available)
+        let size =
+            desktop.displayMode == .fit
+            ? available
+            : CGSize(
+                width: max(available.width, desktop.desktopSize.width),
+                height: max(available.height, desktop.desktopSize.height))
+        if desktop.frame.size != size { desktop.setFrameSize(size) }
+        hasHorizontalScroller = desktop.displayMode != .fit
+        hasVerticalScroller = desktop.displayMode != .fit
+        tile()
+        // Begin at the remote desktop's upper-left corner.
+        if !initializedScroll {
+            contentView.scroll(to: NSPoint(x: 0, y: max(0, size.height - available.height)))
+            reflectScrolledClipView(contentView)
+            initializedScroll = true
+        }
+    }
+    private var initializedScroll = false
+}
 struct DesktopSurface: NSViewRepresentable {
     let view: RDPDesktopView
-    func makeNSView(context: Context) -> RDPDesktopView { view }
-    func updateNSView(_ nsView: RDPDesktopView, context: Context) {}
+    func makeNSView(context: Context) -> RDPViewport { RDPViewport(desktop: view) }
+    func updateNSView(_ nsView: RDPViewport, context: Context) { nsView.layoutDesktop() }
 }

@@ -143,3 +143,25 @@ execution environment.
 
 Apple references: [sandbox inheritance](https://developer.apple.com/library/archive/documentation/Miscellaneous/Reference/EntitlementKeyReference/Chapters/EnablingAppSandbox.html)
 and [UDP/network permissions](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.network.server).
+
+
+## RDP display modes — 9 October 2026
+
+SavedConnection adds optional rdpDisplayMode metadata, preserving existing entity
+and property identities. Missing or unknown values use Fit to window and retain
+existing dynamicResolution behavior. New and quick connections expose the same
+three-mode picker. Fixed 100% and Match window at connection disable remote resize
+requests; the latter waits for a laid-out desktop viewport before starting RDP,
+uses that area (bounded to 200–8192), and keeps it fixed until reconnecting.
+Cancellation clears pending sizing work and the connection callback checks the
+session generation before dialing.
+
+The session still owns its Metal view and latest-frame mailbox. DesktopSurface
+places it in a native NSScrollView for clipping and two-axis panning. At 100%, one
+remote pixel occupies one Mac point, independent of Retina backing pixels. The
+render rectangle also drives input coordinate conversion, including after panning.
+Scrollbars and Option-scroll pan locally; ordinary wheel input continues to Windows.
+Fit remains aspect-preserving and optionally uses existing dynamic server resizing.
+Sizing initially excludes scrollbars so Match window starts without scroll overflow.
+If the server negotiates another resolution, its delivered frame determines the
+actual desktop bounds.

@@ -62,6 +62,7 @@ final class CoreTests: XCTestCase {
         draft.clipboard = true
         draft.audioPlayback = false
         draft.dynamicResolution = false
+        draft.displayMode = .matchWindow
         first.mainContext.insert(folder)
         first.mainContext.insert(SavedConnection(draft: draft))
         try first.mainContext.save()
@@ -74,6 +75,11 @@ final class CoreTests: XCTestCase {
         XCTAssertTrue(restored.clipboard)
         XCTAssertFalse(restored.audioPlayback)
         XCTAssertFalse(restored.dynamicResolution)
+        XCTAssertEqual(restored.displayMode, .matchWindow)
+        profiles[0].rdpDisplayMode = nil
+        XCTAssertEqual(ConnectionDraft(profiles[0]).displayMode, .fit)
+        profiles[0].rdpDisplayMode = "unknown"
+        XCTAssertEqual(ConnectionDraft(profiles[0]).displayMode, .fit)
         let fieldNames = schema.entities.first { $0.name == "SavedConnection" }!.properties.map(\.name)
         XCTAssertFalse(fieldNames.contains("password"))
         XCTAssertFalse(fieldNames.contains("privateKey"))

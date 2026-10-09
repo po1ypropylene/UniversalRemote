@@ -151,12 +151,22 @@ struct ConnectionEditor: View {
                 }
             } else {
                 Section("Remote desktop") {
-                    Toggle("Match desktop size to window", isOn: $draft.dynamicResolution)
-                    TextField("Initial width", value: $draft.desktopWidth, format: .number.grouping(.never))
-                    TextField("Initial height", value: $draft.desktopHeight, format: .number.grouping(.never))
-                    Text(
-                        "Retina scaling is applied after the session connects. Servers without dynamic resize remain fitted to the window."
-                    ).font(.caption).foregroundStyle(.secondary)
+                    Picker("Display", selection: $draft.displayMode) {
+                        ForEach(RDPDisplayMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    Text(draft.displayMode.explanation).font(.caption).foregroundStyle(.secondary)
+                    if draft.displayMode != .matchWindow {
+                        TextField("Desktop width", value: $draft.desktopWidth, format: .number.grouping(.never))
+                        TextField("Desktop height", value: $draft.desktopHeight, format: .number.grouping(.never))
+                    }
+                    if draft.displayMode == .fit {
+                        Toggle("Resize remote desktop with window", isOn: $draft.dynamicResolution)
+                        Text("Requires server support. Otherwise the desktop remains scaled to fit.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text("Display changes apply when you reconnect.").font(.caption).foregroundStyle(.secondary)
                 }
             }
         }

@@ -34,17 +34,21 @@ import SwiftData
                 saved.folderID == folders[0].id
             else { throw WireGuardError.unavailable }
             if CommandLine.arguments.count == 2 {
-                guard saved.wireGuardID == nil else { throw WireGuardError.unavailable }
+                guard saved.wireGuardID == nil, saved.rdpDisplayMode == nil, ConnectionDraft(saved).displayMode == .fit
+                else { throw WireGuardError.unavailable }
                 let tunnel = try SavedWireGuard(
                     name: "Synthetic migrated tunnel", configuration: WireGuardConfiguration())
                 container.mainContext.insert(tunnel)
                 saved.wireGuardID = tunnel.id
+                saved.rdpDisplayMode = RDPDisplayMode.actualSize.rawValue
                 try container.mainContext.save()
                 print("PASS existing SwiftData library migrated with profiles/folders/settings preserved")
             } else {
                 let tunnels = try container.mainContext.fetch(FetchDescriptor<SavedWireGuard>())
-                guard tunnels.count == 1, saved.wireGuardID == tunnels[0].id else { throw WireGuardError.unavailable }
-                print("PASS migrated library reopened with saved WireGuard selection")
+                guard tunnels.count == 1, saved.wireGuardID == tunnels[0].id,
+                    ConnectionDraft(saved).displayMode == .actualSize
+                else { throw WireGuardError.unavailable }
+                print("PASS migrated library reopened with saved WireGuard and RDP display selections")
             }
         #endif
     }

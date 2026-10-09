@@ -17,6 +17,7 @@ import SwiftData
     var terminalTheme: String
     var desktopWidth: Int
     var desktopHeight: Int
+    var rdpDisplayMode: String? = nil
     var dynamicResolution: Bool
     var clipboard: Bool
     var wireGuardID: UUID? = nil
@@ -39,6 +40,7 @@ import SwiftData
         terminalTheme = draft.terminalTheme
         desktopWidth = draft.desktopWidth
         desktopHeight = draft.desktopHeight
+        rdpDisplayMode = draft.displayMode.rawValue
         dynamicResolution = draft.dynamicResolution
         clipboard = draft.clipboard
         wireGuardID = draft.wireGuardID
@@ -61,6 +63,7 @@ import SwiftData
         terminalTheme = draft.terminalTheme
         desktopWidth = draft.desktopWidth
         desktopHeight = draft.desktopHeight
+        rdpDisplayMode = draft.displayMode.rawValue
         dynamicResolution = draft.dynamicResolution
         clipboard = draft.clipboard
         wireGuardID = draft.wireGuardID

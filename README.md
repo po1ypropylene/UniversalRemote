@@ -79,8 +79,13 @@ Keys follow the app’s existing credential storage policy. See
 - Certificate chains and host names evaluated through macOS Security.framework.
   Untrusted certificates require explicit approval; trust exceptions are scoped
   to host, port, and protocol. No accept-all certificate setting is enabled.
-- BGRA framebuffer rendered through Metal, with aspect-ratio fitting and Retina
-  scaling. Dynamic server resizing is requested when supported.
+- BGRA framebuffer rendered through Metal. In **Display options → Remote desktop**,
+  choose **Fit to window**, **100% with scrolling**, or **Match window at connection**.
+  Fit scales the entire desktop and optionally requests server resizing. 100% uses
+  one remote pixel per Mac point, with your chosen desktop dimensions. Match window
+  starts at the available desktop area and keeps that resolution until reconnecting;
+  shrinking the window adds scrolling. Use scrollbars or Option-scroll to pan;
+  ordinary scrolling goes to Windows. Display changes apply after reconnecting.
 - Mouse, keyboard, scrolling, remote cursor, Unicode text input, and
   **Ctrl + Alt + Delete**.
 - Optional text clipboard sharing while the session is selected. It defaults off.

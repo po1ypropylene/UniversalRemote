@@ -16,6 +16,7 @@ struct ConnectionDraft: Identifiable {
     var terminalTheme = "Midnight"
     var desktopWidth = 1440
     var desktopHeight = 900
+    var displayMode = RDPDisplayMode.fit
     var dynamicResolution = true
     var clipboard = false
     var wireGuardID: UUID?
@@ -37,6 +38,7 @@ struct ConnectionDraft: Identifiable {
         terminalTheme = saved.terminalTheme
         desktopWidth = saved.desktopWidth
         desktopHeight = saved.desktopHeight
+        displayMode = RDPDisplayMode(rawValue: saved.rdpDisplayMode ?? "") ?? .fit
         dynamicResolution = saved.dynamicResolution
         clipboard = saved.clipboard
         wireGuardID = saved.wireGuardID

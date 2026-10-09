@@ -209,3 +209,25 @@ This closes a gap in the earlier verification: those protocol fixtures used an
 unsandboxed parent and did not establish packaged helper startup. Production
 WireGuard/RDP interoperability remains for the user to retry; no real peer was
 contacted in this investigation. No commit/publication was performed.
+
+
+## RDP display choices — 9 October 2026
+
+- Seventeen core tests passed, including saved display mode reopening and missing/
+  unknown mode fallback to the existing fitted behavior.
+- The disposable pre-feature SwiftData migration passed, preserving profiles,
+  folders and settings, then saving/reopening both tunnel and display selections.
+- Native AppKit/Metal-view checks passed 100% document bounds, horizontal/vertical
+  scrollbars, correct remote pointer coordinates after panning, no resize request
+  in fixed mode, initial viewport measurement without scrollbar overflow, retained
+  resolution after window shrinking, fitted document bounds and keyboard shortcuts.
+- Seven SSH, four TLS RDP, five NLA RDP and four protected-file synthetic fixture
+  checks passed. No real servers or private credential files were used.
+- Final Release build passed final bundle signatures, platform/dependency/loader
+  verification and the sandboxed helper probe. Repository hygiene and diff
+  whitespace checks passed.
+
+The display tests use a disposable native window; real-server resolution
+negotiation, visual quality on different Retina displays and interactive scrolling
+performance remain unverified. A server may return a different starting resolution,
+which becomes the scrollable desktop size. No commit or publication was performed.

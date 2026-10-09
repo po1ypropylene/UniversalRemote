@@ -34,7 +34,10 @@ import SwiftTerm
             desktop = nil
         } else {
             terminal = nil
-            desktop = RDPDesktopView(frame: NSRect(x: 0, y: 0, width: 1000, height: 700))
+            let view = RDPDesktopView(frame: NSRect(x: 0, y: 0, width: 1000, height: 700))
+            view.displayMode = profile.displayMode
+            view.setDesktopSize(CGSize(width: profile.desktopWidth, height: profile.desktopHeight))
+            desktop = view
         }
     }
     func start(credential: ConnectionCredential) {
@@ -174,13 +177,18 @@ import SwiftTerm
             desktop.preparePaste = { [weak self] in self?.syncClipboard() }
             desktop.sendPointer = { [weak client] flags, x, y in client?.sendPointerFlags(flags, x: x, y: y) }
             desktop.resizeRemote = { [weak self, weak client] width, height, scale in
-                guard let self, self.profile.dynamicResolution else { return }
+                guard let self, self.profile.displayMode == .fit, self.profile.dynamicResolution else { return }
                 client?.resizeWidth(width, height: height, scale: scale)
             }
-            client.connectHost(
-                profile.host, port: profile.port, username: profile.username, domain: profile.domain,
-                password: credential.password, width: profile.desktopWidth, height: profile.desktopHeight, scale: 100,
-                clipboard: profile.clipboard, audioPlayback: profile.audioPlayback)
+            desktop.withInitialSize(width: profile.desktopWidth, height: profile.desktopHeight) {
+                [weak self, weak client] size in
+                guard let self, self.generation == attempt, self.state.active else { return }
+                client?.connectHost(
+                    self.profile.host, port: self.profile.port, username: self.profile.username,
+                    domain: self.profile.domain,
+                    password: credential.password, width: Int(size.width), height: Int(size.height), scale: 100,
+                    clipboard: self.profile.clipboard, audioPlayback: self.profile.audioPlayback)
+            }
         }
     }
     private func trustCallback(attempt: UUID) -> (String, String) -> Bool {
@@ -227,6 +235,7 @@ import SwiftTerm
             tunnel = nil
             cancelPrompts()
             stopClipboard()
+            desktop?.cancelPendingDisplayWork()
             desktop?.releaseInput()
             desktop?.inputEnabled = false
         }
@@ -260,6 +269,7 @@ import SwiftTerm
         tunnel = nil
         cancelPrompts()
         stopClipboard()
+        desktop?.cancelPendingDisplayWork()
         desktop?.releaseInput()
         desktop?.inputEnabled = false
         ssh?.disconnect()

@@ -45,6 +45,48 @@ import Foundation
         desktop.inputEnabled = false
         precondition(!desktop.performKeyEquivalent(with: event(.keyDown, key: 9, flags: .command, text: "v")))
         precondition(events.isEmpty)
+        // Actual-size scrolling must preserve remote pointer coordinates after panning.
+        desktop.displayMode = .actualSize
+        desktop.setDesktopSize(CGSize(width: 1200, height: 900))
+        let viewport = RDPViewport(desktop: desktop)
+        window.contentView = viewport
+        viewport.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+        viewport.layoutDesktop()
+        precondition(desktop.frame.size == CGSize(width: 1200, height: 900))
+        precondition(viewport.hasHorizontalScroller && viewport.hasVerticalScroller)
+        viewport.contentView.scroll(to: NSPoint(x: 200, y: 400))
+        viewport.reflectScrolledClipView(viewport.contentView)
+        desktop.inputEnabled = true
+        var pointer: (Int, Int)?
+        desktop.sendPointer = { _, x, y in pointer = (x, y) }
+        let location = desktop.convert(NSPoint(x: 250, y: 650), to: nil)
+        let mouse = NSEvent.mouseEvent(
+            with: .mouseMoved, location: location, modifierFlags: [],
+            timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0,
+            clickCount: 0, pressure: 0)!
+        desktop.mouseMoved(with: mouse)
+        precondition(pointer?.0 == 250 && pointer?.1 == 250)
+        var resizes = 0
+        desktop.resizeRemote = { _, _, _ in resizes += 1 }
+        desktop.requestResize()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        precondition(resizes == 0)
+        desktop.displayMode = .matchWindow
+        var initial: CGSize?
+        desktop.withInitialSize(width: 1440, height: 900) { initial = $0 }
+        precondition(
+            initial
+                == CGSize(
+                    width: viewport.contentView.bounds.width.rounded(.down),
+                    height: viewport.contentView.bounds.height.rounded(.down)))
+        viewport.frame.size = CGSize(width: 300, height: 200)
+        viewport.layoutDesktop()
+        precondition(desktop.desktopSize == initial!)
+        desktop.displayMode = .fit
+        viewport.layoutDesktop()
+        precondition(desktop.frame.size == viewport.contentView.bounds.size)
+        print(
+            "PASS RDP display: 100% scrolling, panned pointer coordinates, fixed resolution, initial window size, fit")
         print(
             "PASS RDP keyboard: editing shortcuts, paste ordering, modifier release, app shortcuts, disconnected input")
     }
