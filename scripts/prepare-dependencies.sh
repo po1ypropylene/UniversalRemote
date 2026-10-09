@@ -45,3 +45,5 @@ cmake --build .build/freerdp -j "$jobs"
 cmake --install .build/freerdp
 printf 'Native dependencies are ready. Open UniversalRemote.xcodeproj and build.\n'
 printf 'arm64-macos27-audio1\n' > "$install_root/.platform"
+
+scripts/prepare-wireguard.sh

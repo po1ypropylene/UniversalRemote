@@ -5,6 +5,8 @@ struct ConnectionCredential: Codable {
     var password = ""
     var privateKey: Data?
     var keyName: String?
+    var wireGuardPrivateKey: String?
+    var wireGuardPresharedKey: String?
 }
 struct KeychainError: LocalizedError {
     let status: OSStatus

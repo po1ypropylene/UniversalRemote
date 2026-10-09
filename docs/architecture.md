@@ -59,7 +59,7 @@ SFTP/SCP/WebDAV/file transfer; SSH config/agent/jump hosts/forwarding/certificat
 
 ## Connection editor and desktop negotiation — 8 October 2026
 
-The editor keeps protocol, name, host/port, username/domain, authentication and credentials in one form. Appearance and trust settings use inline disclosure groups. The connection editor omits organization and notes in all modes, including editing saved connections. Session tabs use SwiftUI GlassEffectContainer and interactive capsule glass, with a tinted selected tab; primary editor actions use the native glass button style. Session ownership, reordering and disconnect semantics are unchanged.
+The editor keeps protocol, name, host/port, username/domain, authentication and credentials in one form. Appearance and trust settings use inline disclosure groups. The macOS grouped Form owns scrolling directly within the fixed-height editor body; wrapping it in another ScrollView creates competing scroll layouts when disclosures change height. The connection editor omits organization and notes in all modes, including editing saved connections. Session tabs use SwiftUI GlassEffectContainer and interactive capsule glass, with a tinted selected tab; primary editor actions use the native glass button style. Session ownership, reordering and disconnect semantics are unchanged.
 
 The supplied real RDP server authenticated with graphics-pipeline support enabled but delivered no paint callbacks/visible frames. Disabling SupportGraphicsPipeline delivered visible desktop pixels. Phase 1 therefore negotiates standard software bitmap rendering (RemoteFX/NSCodec remain available), retaining independent dynamic display control. This is a verified workaround for that server, not a complete diagnosis of its GFX interoperability or a claim about all servers. The Metal renderer and latest-frame buffering are unchanged.
 
@@ -70,3 +70,76 @@ Disclosure headers use a full-width button with an expanded/collapsed accessibil
 The RDP worker retains local clipboard updates even before channel attachment and advertises them only after MonitorReady. It advertises text only once a local value exists. The selected session synchronizes pending clipboard changes before paste input as well as on its timer. Command+C/X/V/A translate to Windows Control shortcuts, releasing any previously forwarded Command modifier first. Clipboard sharing remains opt-in and text-only. Reconnecting a saved session reloads its current profile from the workspace model context so edited sharing settings take effect; ad hoc or deleted profiles retain their session snapshot. A failed metadata fetch leaves the existing session open and reports the error.
 
 FreeRDP's pinned Mac audio backend is now built and bundled. The saved audioPlayback Boolean defaults to true, including automatic migration of older profiles; existing entity/property identities stay intact. The adapter requests remote playback and disables microphone capture. FreeRDP owns audio output and its connection lifecycle. No external player is launched. The native feature stamp now includes audio1 so existing checkouts rebuild the previously audio-disabled libraries.
+
+
+## Embedded WireGuard for RDP — 9 October 2026
+
+SavedWireGuard is a new metadata-only SwiftData entity. SavedConnection gains an
+optional wireGuardID; all existing entity/property identities remain unchanged.
+The existing CredentialStore gains optional WireGuard key fields, preserving old
+credential decoding and its disclosed development fallback. The profile library
+supports manual configuration and bounded, single-peer .conf import. Deletion
+retains dangling RDP IDs deliberately so it cannot silently enable direct RDP.
+
+Networking/WireGuard builds a bundled Go helper from checksum-pinned wireguard-go
+and its compatible gVisor netstack. The app-provided reference checkouts are
+read-only; the independently written glue uses upstream libraries, not copied
+protocol adapters. No system TUN/VPN/routes/DNS or administrator access is used.
+One device/helper per saved profile avoids competing endpoints for simultaneous
+RDP tabs. Each tab leases a token-authenticated, loopback-only ephemeral TCP
+listener restricted to its chosen destination and peer AllowedIPs. Requests/keys
+travel over an anonymous pipe; diagnostics suppress config/keys/hostnames.
+
+The pinned FreeRDP 3.32.1 TCPConnect hook changes socket dialing only. Settings
+retain the original ServerHostname/ServerPort for TLS, Security.framework hostname
+validation, NLA and existing trust scoping. Endpoint redirection fails closed;
+multitransport is explicitly disabled. Rendering, audio, clipboard and main-actor
+prompt handling remain intact. The profile registry performs blocking pipe work
+on workers; cancellation tears down individual leases, and the final lease closes
+the helper. Parent EOF/signals close all devices/listeners. Startup, remote dialing
+and socket authentication have bounded waits. Active edited profiles require all
+users to disconnect before new settings/keys are applied. See docs/wireguard.md.
+
+
+## Split-tunnel DNS and startup diagnostics — 9 October 2026
+
+An exported working split-tunnel configuration exposed an overly strict helper
+startup check: DNS servers outside peer AllowedIPs were rejected even when RDP
+used a literal IP address. That rejection occurred before device creation. DNS
+is now routed per explicitly configured server: covered addresses use gVisor/
+WireGuard; uncovered addresses use ordinary UDP/TCP sockets, scoped to DNS only.
+Go's resolver performs A/AAAA queries with bounded per-server waits and TCP
+fallback; it never changes system DNS configuration. Literal addresses need no
+DNS. The final RDP addresses remain restricted to AllowedIPs and always use
+WireGuard; resolving a public address cannot enable direct RDP fallback.
+
+The helper sends allowlisted startup error codes rather than a generic Boolean.
+Swift preserves stage-specific errors without exposing upstream errors/config.
+The authenticated bridge reports fixed DNS/destination failure status bytes before
+RDP negotiation; the native adapter converts them to actionable, redacted messages.
+Unexpected shared-device failures retain cancellation/generation safeguards.
+
+
+## Sandboxed helper packaging — 9 October 2026
+
+The app uses App Sandbox. An unsandboxed test parent had hidden two missing
+packaging requirements: the embedded command-line helper needs exactly
+com.apple.security.app-sandbox and com.apple.security.inherit, and its parent
+needs both network.client and network.server for the WireGuard UDP socket and
+loopback TCP listener. Configuration/WireGuardHelper.entitlements supplies the
+child's two inheritance keys during nested signing; both Xcode configurations
+supply incoming/outgoing network permissions. App Sandbox remains enabled. The
+helper still binds the bridge only to loopback and restricts each token to its
+selected destination. No VPN/TUN/system route or filesystem permissions were added.
+
+verify-bundle.py checks the exact child entitlements and parent network rights,
+then launches --verify-wireguard-helper from the signed final app. This pre-UI
+probe uses synthetic keys and an owned loopback UDP endpoint, starts the actual
+WireGuardTransport, checks its listener, and verifies cleanup. It never opens
+SwiftData/Keychain, saved profiles or private config files. The existing loader
+check remains separate. The lifecycle test parent is now also sandboxed and its
+child signed for inheritance, matching the app instead of a command-line-only
+execution environment.
+
+Apple references: [sandbox inheritance](https://developer.apple.com/library/archive/documentation/Miscellaneous/Reference/EntitlementKeyReference/Chapters/EnablingAppSandbox.html)
+and [UDP/network permissions](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.network.server).

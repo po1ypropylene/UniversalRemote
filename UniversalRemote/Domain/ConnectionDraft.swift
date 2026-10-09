@@ -18,6 +18,7 @@ struct ConnectionDraft: Identifiable {
     var desktopHeight = 900
     var dynamicResolution = true
     var clipboard = false
+    var wireGuardID: UUID?
     var audioPlayback = true
     init() {}
     init(_ saved: SavedConnection) {
@@ -38,6 +39,7 @@ struct ConnectionDraft: Identifiable {
         desktopHeight = saved.desktopHeight
         dynamicResolution = saved.dynamicResolution
         clipboard = saved.clipboard
+        wireGuardID = saved.wireGuardID
         audioPlayback = saved.audioPlayback
     }
     var validationMessage: String? {

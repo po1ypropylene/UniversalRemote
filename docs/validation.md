@@ -1,5 +1,21 @@
 # Phase 1 validation
 
+## Incremental Xcode build packaging — 9 October 2026
+
+- Fixed the always-running native-library packaging phase so it replaces the
+  generated third-party-notice directory before copying notices. This avoids a
+  permission failure when a subsequent build encounters existing read-only
+  license files and also prevents removed notices from remaining in the bundle.
+- Repeated Xcode builds passed after the fix. No protocol tests or live-server
+  connections were needed for this packaging-only correction.
+
+## Connection editor scrollbar — 8 October 2026
+
+- Removed the outer ScrollView around the macOS grouped Form. The Form now owns the single scrolling viewport and scrollbar while the header and action buttons stay fixed.
+- Compiled an isolated preview from the actual editor source, using in-memory SwiftData and stubbed credential/trust/network actions. Inspected Display options expansion/collapse, Sharing & server identity expansion and scrolling to its last control. The accessibility hierarchy confirms one scroll area and one vertical scrollbar throughout the inspected states, instead of the previous nested scroll areas.
+- Release build, final bundle platform/dependency/signature/loader verification, repository hygiene and diff whitespace checks passed. Swift formatting used the repository configuration. Initial sandbox cache/macro restrictions were resolved by building with the required access.
+- This layout-only change did not repeat protocol tests or connect to servers. Visual checks inspected settled UI states; no automated frame-by-frame animation measurement was performed.
+
 ## Form, RDP clipboard and audio — 8 October 2026
 
 - Release build passed with the rebuilt pinned Mac audio backend; final bundle platform, native-library closure, signatures and pre-UI loader checks passed.
@@ -105,3 +121,91 @@ All app-authored visible brand text now uses **Universal Remote**, including win
 - Repeated cached app builds passed after build.sh was corrected to recreate only the generated app product before Xcode builds/signs it. The first incremental attempt had failed final resource-seal verification after the always-running native packaging phase.
 - The output filename derives from built bundle metadata. Version 0.1.0 / build 1 produced Universal-Remote-0.1.0-build-1-arm64.dmg and its SHA256 file; the checksum was independently checked. Generated outputs are Git-ignored and temporary staging was cleaned.
 - Shell syntax, project-plist validation and repository hygiene passed. No app UI/session tests or live servers were used for this packaging change. The DMG is ad-hoc signed through its app and unnotarized; Developer ID distribution and testing the installed app on another Mac remain pending. No commit, tag, upload or release was made.
+
+
+## Embedded WireGuard — 9 October 2026
+
+- Sixteen core tests passed, including bounded/redacted single-peer configuration
+  import, unsafe/duplicate fields, key/metadata separation, optional credential
+  decoding, persisted selection and fail-closed references after deletion.
+- Race-enabled Go tests passed with generated keys and loopback UDP peers:
+  encrypted TCP/half-close, bad local token rejection, AllowedIPs/DNS restriction,
+  cancelled dialing, parent EOF cleanup, shared-device independent sessions and
+  cancellation during an invalid-peer handshake.
+- Synthetic RDP over the actual encrypted WireGuard/netstack/loopback/native path
+  passed desktop frames, certificate rejection, disconnect and clipboard exchange.
+- The actual Swift transport manager passed shared leases, independent cleanup,
+  changed-profile refusal and cancellation. A native hook fixture verified that
+  TLS/NLA settings retain the real identity, the socket uses token authentication,
+  and redirects to a different host/port are refused.
+- A disposable pre-feature SwiftData library migrated and reopened with its
+  connection/folder/settings preserved; saving and reopening a new tunnel
+  selection passed. No user database or protected test input was read/reset.
+- Existing seven SSH, four TLS RDP, five NLA RDP, audio backend, keyboard and four
+  protected-file synthetic fixture checks passed. No real servers were connected.
+- Final Release build passed bundled helper/library signatures, arm64-only and
+  macOS 27 deployment checks, relocated dependency checks and the pre-UI loader
+  probe. Repository hygiene, script syntax and diff whitespace checks passed.
+- An isolated in-memory UI app used synthetic profiles and an in-memory credential
+  stub. Visually reviewed the profile manager and RDP selector; loading/editing/
+  saving a profile and reflecting its changed name in the selector passed. This
+  UI exercise does not verify production Keychain access or a real tunnel.
+
+Real WireGuard/RDP server compatibility, internal DNS/IPv6-only peers, endpoint
+roaming, network changes, long sessions and performance remain unverified.
+Dependency pins/checksums and bundled notices are present; a comprehensive
+vulnerability/legal review, Developer ID/notarization and clean-Mac validation
+remain pending. Existing local credential fallback remains unencrypted and
+explicitly disclosed. No commit or publication was performed.
+
+
+## Exported split-tunnel startup fix — 9 October 2026
+
+- Private inspection of the user-selected export confirmed valid key lengths and
+  DNS servers outside AllowedIPs. The previous helper treated this as fatal
+  before creating the WireGuard device. No export contents, keys, endpoint or
+  address values were copied into tracked artifacts/logs.
+- Race-enabled Go tests passed configured DNS outside the tunnel using an isolated
+  ordinary UDP resolver, private DNS across an encrypted synthetic peer, and an
+  encrypted TCP/IP-address connection with out-of-range configured DNS.
+- The export's routing/DNS structure initialized with replacement synthetic keys
+  and an owned loopback endpoint. The real peer was not contacted and the export
+  was unchanged; this is a configuration-structure check, not a live VPN pass.
+- Seventeen core tests passed, including specific startup error decoding and
+  suppression of arbitrary diagnostic content. The existing encrypted RDP
+  accept/reject/disconnect/clipboard and shared-session/cleanup checks passed.
+- Native syntax checking passed against the pinned FreeRDP headers. The native
+  identity fixture covers redacted DNS/destination status messages as well as
+  original TLS/NLA identity, token authentication and redirection refusal.
+
+- The rebuilt Release app passed final helper/library signatures, platform,
+  dependency and loader checks; repository hygiene and diff whitespace passed.
+
+Production WireGuard/RDP connectivity remains for a user retry. The app's DNS
+policy now matches the explicit split routes and can send hostname queries to
+configured public DNS servers; RDP remains fail-closed within AllowedIPs.
+
+
+## Helper initialization under App Sandbox — 9 October 2026
+
+- Reproduced the reported initialization error with the same synthetic settings
+  that passed in an unsandboxed test, after signing the parent with the app's
+  original sandbox/network-client permissions. No real settings or keys were used.
+- The final app had no sandbox inheritance entitlements on its bundled helper
+  and lacked the network-server entitlement needed for UDP reception/local TCP
+  listening. Added only the two required child inheritance keys and parent
+  incoming-network permission; sandboxing stays enabled.
+- The corrected sandboxed synthetic lifecycle passed shared sessions, independent
+  cleanup, changed-profile refusal and cancellation. Native identity/trust/bridge
+  diagnostic checks passed.
+- The rebuilt Release app passed signatures, exact helper inheritance entitlements,
+  parent sandbox/network permissions, platform and dependency checks, the pre-UI
+  loader, and a new helper startup/listener/cleanup probe executed from the actual
+  signed app. Neither pre-UI probe reads saved profiles or credential stores.
+- Project/entitlement plist checks, script syntax, repository hygiene and diff
+  whitespace checks passed. The user's export and saved credentials were untouched.
+
+This closes a gap in the earlier verification: those protocol fixtures used an
+unsandboxed parent and did not establish packaged helper startup. Production
+WireGuard/RDP interoperability remains for the user to retry; no real peer was
+contacted in this investigation. No commit/publication was performed.

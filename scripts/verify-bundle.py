@@ -10,6 +10,8 @@ info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
 if float(info.get('LSMinimumSystemVersion', '0').split('.')[0]) < 27:
     raise SystemExit('The app must require macOS 27 or later.')
 executable = app / 'Contents/MacOS' / info['CFBundleExecutable']
+if not (app / 'Contents/MacOS/UniversalRemoteWireGuard').is_file():
+    raise SystemExit('Missing embedded WireGuard helper.')
 libraries = list((app / 'Contents/Frameworks').glob('*.dylib'))
 
 def command(*args):
@@ -30,6 +32,18 @@ for binary in binaries:
         continue
     if command('lipo', '-archs', str(binary)).strip() != 'arm64':
         raise SystemExit(f'{binary.name} must contain only arm64.')
+    load_commands = command('otool', '-l', str(binary)).splitlines()
+    minima = []
+    active_command = ''
+    for line in load_commands:
+        words = line.strip().split()
+        if len(words) == 2 and words[0] == 'cmd':
+            active_command = words[1]
+        if len(words) == 2 and ((active_command == 'LC_BUILD_VERSION' and words[0] == 'minos') or
+                                (active_command == 'LC_VERSION_MIN_MACOSX' and words[0] == 'version')):
+            minima.append(words[1])
+    if not minima or any(int(value.split('.')[0]) < 27 for value in minima):
+        raise SystemExit(f'{binary.name} must target macOS 27 or later.')
     if signing(binary)[1] != app_team:
         raise SystemExit(f'{binary.name} has a different signing team.')
     for line in command('otool', '-L', str(binary)).splitlines()[1:]:
@@ -39,8 +53,22 @@ for binary in binaries:
         if dependency.startswith('@rpath/') and any((app / folder / Path(dependency).name).exists() for folder in ['Contents/Frameworks', 'Contents/MacOS']):
             continue
         raise SystemExit(f'{binary.name} has an unresolved dependency: {dependency}')
-# This exits before creating the connection library or UI, but runs the real loader.
+def entitlements(path):
+    result = subprocess.run(['codesign', '-d', '--entitlements', ':-', str(path)], capture_output=True, check=True)
+    return plistlib.loads(result.stdout) if result.stdout else {}
+parent_rights = entitlements(executable)
+if not all(parent_rights.get(key) is True for key in ['com.apple.security.app-sandbox',
+        'com.apple.security.network.client', 'com.apple.security.network.server']):
+    raise SystemExit('App must retain App Sandbox and both network permissions for embedded WireGuard.')
+helper_rights = entitlements(app / 'Contents/MacOS/UniversalRemoteWireGuard')
+expected_helper_rights = {'com.apple.security.app-sandbox': True, 'com.apple.security.inherit': True}
+if helper_rights != expected_helper_rights:
+    raise SystemExit('WireGuard helper must have exactly the sandbox and inheritance entitlements.')
+# These exit before creating the connection library/UI and never load saved keys.
 result = subprocess.run([str(executable), '--verify-bundle-launch'], capture_output=True, text=True, timeout=15)
 if result.returncode != 0 or 'Universal Remote loader check passed' not in result.stdout:
     raise SystemExit('Packaged app failed its loader check. Inspect local build diagnostics.')
-print(f'PASS bundle: macOS 27+, arm64, {len(libraries)} native libraries, signatures and loader.')
+probe = subprocess.run([str(executable), '--verify-wireguard-helper'], capture_output=True, text=True, timeout=25)
+if probe.returncode != 0 or 'Universal Remote sandboxed WireGuard helper check passed' not in probe.stdout:
+    raise SystemExit('Packaged app failed its sandboxed WireGuard helper check. No real-server settings were used.')
+print(f'PASS bundle: macOS 27+, arm64, {len(libraries)} native libraries, signatures, loader and sandboxed WireGuard helper.')

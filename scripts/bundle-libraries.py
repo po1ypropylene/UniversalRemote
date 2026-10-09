@@ -53,9 +53,22 @@ for executable in (app / 'Contents/MacOS').iterdir():
     for dependency in dependencies(executable):
         if Path(dependency).name in sources:
             subprocess.run(['install_name_tool', '-change', dependency, '@rpath/' + Path(dependency).name, str(executable)], check=True)
+helper_source = prefix / 'bin' / 'UniversalRemoteWireGuard'
+if not helper_source.is_file():
+    raise SystemExit('Missing embedded WireGuard helper. Run scripts/prepare-wireguard.sh first.')
+helper = app / 'Contents/MacOS/UniversalRemoteWireGuard'
+shutil.copy2(helper_source, helper)
+helper.chmod(0o755)
+helper_signing = ['codesign', '--force', '--sign', identity, '--timestamp=none']
+if os.environ.get('ENABLE_HARDENED_RUNTIME') == 'YES':
+    helper_signing += ['--options', 'runtime']
+helper_entitlements = Path(__file__).resolve().parent.parent / 'Configuration/WireGuardHelper.entitlements'
+subprocess.run(helper_signing + ['--entitlements', str(helper_entitlements), str(helper)], check=True)
 license_root = Path(__file__).resolve().parent.parent / 'ThirdParty'
 if license_root.exists():
-    shutil.copytree(license_root, resources / 'ThirdParty', dirs_exist_ok=True)
+    bundled_licenses = resources / 'ThirdParty'
+    shutil.rmtree(bundled_licenses, ignore_errors=True)
+    shutil.copytree(license_root, bundled_licenses)
 for name in sources:
     for dependency in dependencies(frameworks / name):
         if dependency.startswith(('/opt/', '/Users/', '/private/')):

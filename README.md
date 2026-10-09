@@ -49,6 +49,17 @@ terminate their sessions. The toolbar provides reconnect, disconnect, full scree
 and connection details. Closing a session disconnects it. Restored tabs remain
 disconnected until you choose Reconnect; ad hoc connections are not restored.
 
+### WireGuard for private RDP servers
+
+Open **File → WireGuard Connections…** to import or create named WireGuard
+profiles. In an RDP connection’s Add/Edit screen, choose a profile under
+**WireGuard connection** and enter the private RDP server address. The tunnel
+starts automatically and closes when its last RDP session disconnects. Multiple
+RDP tabs can share a profile. This embedded userspace transport needs no separate
+WireGuard app or macOS VPN setup and does not change other applications’ routes.
+Keys follow the app’s existing credential storage policy. See
+[WireGuard setup and limits](docs/wireguard.md).
+
 ### SSH
 
 - Password, encrypted private-key, and keyboard-interactive authentication.
@@ -99,7 +110,7 @@ disconnected until you choose Reconnect; ad hoc connections are not restored.
 
 ## Build from source
 
-Requirements: Xcode with the macOS SDK and Metal compiler, Git, CMake, and Python 3.
+Requirements: Xcode with the macOS SDK and Metal compiler, Git, CMake, Python 3, and Go 1.27+.
 The native dependency script requires internet access on its first run. Build
 artifacts and downloaded source are isolated in `.build` and `Vendor/Native`.
 

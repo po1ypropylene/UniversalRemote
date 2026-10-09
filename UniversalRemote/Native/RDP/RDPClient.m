@@ -15,14 +15,19 @@
 #import <freerdp/freerdp.h>
 #import <freerdp/gdi/gdi.h>
 #import <freerdp/gdi/gfx.h>
+#import <freerdp/transport_io.h>
 #import <winpr/synch.h>
 #import <winpr/wlog.h>
 #pragma clang diagnostic pop
+#import <errno.h>
 #import <openssl/err.h>
 #import <openssl/pem.h>
 #import <openssl/x509.h>
+#import <poll.h>
 #import <stdatomic.h>
+#import <sys/socket.h>
 #import <time.h>
+#import <unistd.h>
 
 typedef struct {
     rdpClientContext common;
@@ -32,6 +37,9 @@ typedef struct {
     BOOL clipboardReady;
     NSString *__unsafe_unretained localText;
     double lastFrame;
+    pTCPConnect directTCPConnect;
+    const char *identityHost;
+    int identityPort;
 } URContext;
 typedef struct {
     rdpPointer pointer;
@@ -43,6 +51,7 @@ typedef struct {
     freerdp *_instance;
     atomic_bool _stopped;
 }
+@property(nonatomic, copy) NSString *tunnelFailure;
 - (void)runHost:(NSString *)host
              port:(NSInteger)port
          username:(NSString *)username
@@ -56,6 +65,88 @@ typedef struct {
 - (void)drainEvents:(URContext *)context;
 @end
 static URRDPClient *owner(rdpContext *context) { return (__bridge URRDPClient *)((URContext *)context)->owner; }
+// Override only TCP dialing; FreeRDP retains the real hostname for TLS/NLA.
+// Any server redirection to another endpoint fails closed.
+static int tunnelTCPConnect(rdpContext *context, rdpSettings *settings, const char *hostname, int port, DWORD timeout) {
+    URContext *ctx = (URContext *)context;
+    URRDPClient *client = owner(context);
+    if (!hostname || !ctx->identityHost || strcasecmp(hostname, ctx->identityHost) || port != ctx->identityPort ||
+        client.tunnelPort <= 0 || client.tunnelPort > 65535 || client.tunnelToken.length != 64)
+        return -1;
+    int fd = ctx->directTCPConnect(context, settings, "127.0.0.1", (int)client.tunnelPort, timeout);
+    if (fd < 0)
+        return -1;
+    BYTE token[32];
+    for (int i = 0; i < 32; i++) {
+        unsigned int byte = 0;
+        NSString *pair = [client.tunnelToken substringWithRange:NSMakeRange(i * 2, 2)];
+        if (![[NSScanner scannerWithString:pair] scanHexInt:&byte]) {
+            close(fd);
+            return -1;
+        }
+        token[i] = (BYTE)byte;
+    }
+    // The returned native socket can be nonblocking. Wait/send in bounded pieces.
+    size_t sent = 0;
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    double deadline = now.tv_sec + now.tv_nsec / 1e9 + 30;
+    while (sent < sizeof(token)) {
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        if (now.tv_sec + now.tv_nsec / 1e9 >= deadline || freerdp_shall_disconnect_context(context))
+            goto failed;
+        struct pollfd pfd = {fd, POLLOUT, 0};
+        if (poll(&pfd, 1, 100) <= 0)
+            continue;
+        ssize_t count = send(fd, token + sent, sizeof(token) - sent, 0);
+        if (count > 0)
+            sent += (size_t)count;
+        else if (count < 0 && (errno == EAGAIN || errno == EINTR))
+            continue;
+        else
+            goto failed;
+    }
+    for (;;) {
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        if (now.tv_sec + now.tv_nsec / 1e9 >= deadline || freerdp_shall_disconnect_context(context))
+            goto failed;
+        struct pollfd pfd = {fd, POLLIN, 0};
+        if (poll(&pfd, 1, 100) <= 0)
+            continue;
+        BYTE ready = 0;
+        ssize_t count = recv(fd, &ready, 1, 0);
+        if (count == 1 && ready == 1)
+            return fd;
+        if (count == 1) {
+            switch (ready) {
+            case 2:
+                client.tunnelFailure = @"Enter DNS servers in the WireGuard profile or use the private RDP IP address. "
+                                       @"No direct RDP connection was attempted.";
+                break;
+            case 3:
+                client.tunnelFailure =
+                    @"The configured WireGuard DNS servers could not resolve the RDP server. Check DNS or use the "
+                    @"private RDP IP address. No direct RDP connection was attempted.";
+                break;
+            case 4:
+                client.tunnelFailure =
+                    @"The RDP destination is outside the WireGuard profile’s AllowedIPs. Check the private server "
+                    @"address and tunnel routes. No direct RDP connection was attempted.";
+                break;
+            default:
+                client.tunnelFailure = @"WireGuard could not reach the private RDP server. Check the peer, keys, "
+                                       @"server routing and firewall. No direct RDP connection was attempted.";
+                break;
+            }
+        }
+        if (count < 0 && (errno == EAGAIN || errno == EINTR))
+            continue;
+        goto failed;
+    }
+failed:
+    close(fd);
+    return -1;
+}
 static BOOL beginPaint(rdpContext *context) {
     if (context->gdi) {
         context->gdi->primary->hdc->hwnd->invalid->null = TRUE;
@@ -381,6 +472,22 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
     }
     ((URContext *)context)->owner = (__bridge void *)self;
     rdpSettings *s = context->settings;
+    if (self.tunnelPort > 0) {
+        URContext *ctx = (URContext *)context;
+        ctx->identityHost = host.UTF8String;
+        ctx->identityPort = (int)port;
+        rdpTransportIo callbacks = *freerdp_get_io_callbacks(context);
+        ctx->directTCPConnect = callbacks.TCPConnect;
+        callbacks.TCPConnect = tunnelTCPConnect;
+        if (!freerdp_set_io_callbacks(context, &callbacks)) {
+            freerdp_client_context_free(context);
+            [self status:@"failed" message:@"Could not initialize the WireGuard RDP transport."];
+            return;
+        }
+        freerdp_settings_set_bool(s, FreeRDP_SupportMultitransport, FALSE);
+        freerdp_settings_set_uint32(s, FreeRDP_MultitransportFlags, 0);
+        freerdp_settings_set_bool(s, FreeRDP_GatewayEnabled, FALSE);
+    }
     NSString *configRoot = NSProcessInfo.processInfo.environment[@"UNIVERSALREMOTE_RDP_CONFIG"];
     if (!configRoot)
         configRoot =
@@ -448,9 +555,10 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
     }
     UINT32 error = freerdp_get_last_error(context);
     if (!atomic_load(&_stopped) && (!connected || error)) {
-        failure = [NSString stringWithFormat:@"RDP connection failed (%s). Check credentials, "
-                                             @"server settings, and network access.",
-                                             freerdp_get_last_error_name(error) ?: "unknown error"];
+        failure = self.tunnelFailure
+                      ?: [NSString stringWithFormat:@"RDP connection failed (%s). Check credentials, "
+                                                    @"server settings, and network access.",
+                                                    freerdp_get_last_error_name(error) ?: "unknown error"];
     }
     [_lock lock];
     _instance = NULL;

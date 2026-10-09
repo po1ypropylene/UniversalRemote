@@ -1,6 +1,9 @@
 #import <Foundation/Foundation.h>
 NS_ASSUME_NONNULL_BEGIN
 @interface URRDPClient : NSObject
+// Set before connect; zero preserves the direct transport.
+@property(nonatomic) NSInteger tunnelPort;
+@property(nonatomic, copy, nullable) NSString *tunnelToken;
 @property(nonatomic, copy) void (^onStatus)(NSString *state, NSString *message);
 @property(nonatomic, copy) void (^onFrame)(NSData *pixels, NSInteger width, NSInteger height, NSInteger stride);
 @property(nonatomic, copy) BOOL (^onTrust)(NSString *fingerprint, NSString *details);

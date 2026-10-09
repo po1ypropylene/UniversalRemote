@@ -14,3 +14,30 @@ provided by macOS.
 
 FreeRDP includes Google's CPU-feature detection code; its NOTICE and license
 are also included below. Test-only Paramiko is not included in the application.
+
+## Embedded WireGuard transport
+
+| Component | Pinned revision/version | License |
+|---|---|---|
+| wireguard-go | `2631ce99a06f27120d581611cf125d68bc6aa565` | MIT |
+| gVisor netstack | `39ed1f5ac29c` (3 May 2025 Go module) | Apache-2.0 |
+| Go runtime/toolchain | 1.27.1 used for validation | BSD-3-Clause |
+| golang.org/x/crypto | v0.37.0 | BSD-3-Clause |
+| golang.org/x/net | v0.39.0 | BSD-3-Clause |
+| golang.org/x/sys | v0.32.0 | BSD-3-Clause |
+| golang.org/x/time | v0.7.0 | BSD-3-Clause |
+| google/btree | v1.1.2 | Apache-2.0 |
+
+WireGuard source copyright (C) 2017–2025 WireGuard LLC. All rights reserved.
+The adjacent license texts and gVisor authors list ship in the app. The compiled
+module inventory/checksums are in WireGuard-build-modules.txt; go.mod/go.sum are
+the authoritative build pins. The Windows-only wintun module is part of the
+upstream module graph but is not compiled or bundled on macOS.
+
+scripts/prepare-wireguard.sh builds a self-contained, arm64/macOS 27 helper with
+wireguard-go's existing tun/netstack integration. Its compatible gVisor module
+is deliberately pinned by wireguard-go; an arbitrary newer gVisor checkout is
+not substituted. The user-provided reference repositories remain unmodified.
+Upstreams: https://github.com/WireGuard/wireguard-go and
+https://github.com/google/gvisor. Dependency pinning/checksum verification is
+not a completed vulnerability or distribution/legal review.

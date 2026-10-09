@@ -13,8 +13,11 @@ import SwiftUI
             print("Universal Remote loader check passed")
             exit(EXIT_SUCCESS)
         }
+        if ProcessInfo.processInfo.arguments.contains("--verify-wireguard-helper") {
+            exit(WireGuardBundleProbe.run() ? EXIT_SUCCESS : EXIT_FAILURE)
+        }
         do {
-            container = try ModelContainer(for: SavedConnection.self, ConnectionFolder.self)
+            container = try ModelContainer(for: SavedConnection.self, ConnectionFolder.self, SavedWireGuard.self)
             startupError = nil
         } catch {
             container = nil
@@ -48,6 +51,7 @@ import SwiftUI
                     }.keyboardShortcut("k")
                 }
                 CommandGroup(replacing: .saveItem) {
+                    Button("WireGuard Connections…") { workspace.showWireGuard = true }
                     Button("Import Test Servers…") { workspace.chooseTestServerFile() }
                 }
                 CommandGroup(replacing: .textEditing) {

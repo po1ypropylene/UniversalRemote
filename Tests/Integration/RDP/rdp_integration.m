@@ -7,6 +7,11 @@ int main(int argc, char **argv) {
         NSString *mode = @(argv[1]);
         NSInteger port = atoi(argv[2]);
         URRDPClient *client = [URRDPClient new];
+        NSString *tunnelPort = NSProcessInfo.processInfo.environment[@"UNIVERSALREMOTE_FIXTURE_TUNNEL_PORT"];
+        if (tunnelPort) {
+            client.tunnelPort = tunnelPort.integerValue;
+            client.tunnelToken = NSProcessInfo.processInfo.environment[@"UNIVERSALREMOTE_FIXTURE_TUNNEL_TOKEN"];
+        }
         __weak URRDPClient *weakClient = client;
         dispatch_semaphore_t done = dispatch_semaphore_create(0);
         __block BOOL trusted = NO, connected = NO, failed = NO, frame = NO;
@@ -51,7 +56,7 @@ int main(int argc, char **argv) {
         };
         if (clipboardTest)
             [client setClipboardText:samples[0]];
-        [client connectHost:@"127.0.0.1"
+        [client connectHost:(tunnelPort ? @"10.111.0.1" : @"127.0.0.1")
                        port:port
                    username:@"fixture"
                      domain:@""

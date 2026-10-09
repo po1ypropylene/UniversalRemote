@@ -279,6 +279,7 @@
 				DEVELOPMENT_TEAM = EHKBVESDE4;
 				ENABLE_APP_SANDBOX = YES;
                 ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+                ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
                 SWIFT_OBJC_BRIDGING_HEADER = "UniversalRemote/Native-Bridge.h";
                 HEADER_SEARCH_PATHS = ("$(inherited)", "$(SRCROOT)/Vendor/Native/include", "$(SRCROOT)/Vendor/Native/include/freerdp3", "$(SRCROOT)/Vendor/Native/include/winpr3");
                 LIBRARY_SEARCH_PATHS = ("$(inherited)", "$(SRCROOT)/Vendor/Native/lib");
@@ -320,6 +321,7 @@
 				DEVELOPMENT_TEAM = EHKBVESDE4;
 				ENABLE_APP_SANDBOX = YES;
                 ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+                ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
                 SWIFT_OBJC_BRIDGING_HEADER = "UniversalRemote/Native-Bridge.h";
                 HEADER_SEARCH_PATHS = ("$(inherited)", "$(SRCROOT)/Vendor/Native/include", "$(SRCROOT)/Vendor/Native/include/freerdp3", "$(SRCROOT)/Vendor/Native/include/winpr3");
                 LIBRARY_SEARCH_PATHS = ("$(inherited)", "$(SRCROOT)/Vendor/Native/lib");

@@ -81,6 +81,7 @@ struct WorkspaceView: View {
                         Button("New SSH Connection") { create(.ssh) }
                         Button("New RDP Connection") { create(.rdp) }
                         Divider()
+                        Button("WireGuard Connections…") { workspace.showWireGuard = true }
                         Button("Import Test Servers…") { workspace.chooseTestServerFile() }
                         Divider()
                         Button("New Folder…") {
@@ -170,6 +171,7 @@ struct WorkspaceView: View {
         .sheet(item: $workspace.testServerImport) { request in
             TestServerImportView(workspace: workspace, document: request.document)
         }
+        .sheet(isPresented: $workspace.showWireGuard) { WireGuardLibrary() }
         .sheet(item: $workspace.editor) { request in ConnectionEditor(workspace: workspace, request: request) }
         .sheet(
             item: Binding(

@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
     @Published var error: String?
     @Published var testServerImport: TestServerImportRequest?
     @Published var editor: EditorRequest?
+    @Published var showWireGuard = false
     @Published var showInspector = false
     let trust = TrustStore()
     var modelContext: ModelContext?

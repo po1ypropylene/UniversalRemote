@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Foundation
+import SwiftData
 import SwiftTerm
 
 @MainActor final class RemoteSession: ObservableObject, Identifiable {
@@ -15,6 +16,8 @@ import SwiftTerm
     let desktop: RDPDesktopView?
     private var ssh: URSSHClient?
     private var rdp: URRDPClient?
+    private var tunnel: WireGuardTransport?
+    private var tunnelTask: Task<Void, Never>?
     private var pendingWaiters: [PromptWaiter] = []
     private var generation = UUID()
     private var clipboardTimer: Timer?
@@ -35,7 +38,71 @@ import SwiftTerm
         }
     }
     func start(credential: ConnectionCredential) {
+        guard profile.kind == .rdp, let tunnelID = profile.wireGuardID else {
+            startProtocol(credential: credential)
+            return
+        }
         generation = UUID()
+        let attempt = generation
+        state = .connecting
+        message = "Starting WireGuard…"
+        do {
+            guard let context = workspace?.modelContext else { throw WireGuardError.unavailable }
+            var query = FetchDescriptor<SavedWireGuard>(predicate: #Predicate { $0.id == tunnelID })
+            query.fetchLimit = 1
+            guard let saved = try context.fetch(query).first else { throw WireGuardError.unavailable }
+            let configuration = try saved.configuration()
+            guard let keys = try CredentialStore.load(tunnelID) else { throw WireGuardError.missingKeys }
+            let transport = WireGuardTransport()
+            tunnel = transport
+            let host = profile.host
+            let port = profile.port
+            let reference = WeakRemoteSession(self)
+            let onExit: @Sendable () -> Void = {
+                Task { @MainActor in
+                    guard let self = reference.value, self.generation == attempt, self.state.active else { return }
+                    self.rdp?.disconnect()
+                    self.update("failed", message: WireGuardError.transport.localizedDescription, attempt: attempt)
+                    self.generation = UUID()
+                }
+            }
+            tunnelTask = Task { [weak self] in
+                do {
+                    let endpoint = try await Task.detached(priority: .userInitiated) {
+                        try transport.start(
+                            id: tunnelID, configuration: configuration, credential: keys, host: host, port: port,
+                            onExit: onExit)
+                    }.value
+                    guard let self, self.generation == attempt, !Task.isCancelled else {
+                        transport.stop()
+                        return
+                    }
+                    self.startProtocol(
+                        credential: credential, attempt: attempt, tunnelPort: endpoint.port, tunnelToken: endpoint.token
+                    )
+                } catch {
+                    guard let self, self.generation == attempt, !Task.isCancelled else {
+                        transport.stop()
+                        return
+                    }
+                    self.update(
+                        "failed",
+                        message: (error as? WireGuardError)?.localizedDescription
+                            ?? WireGuardError.transport.localizedDescription, attempt: attempt)
+                }
+            }
+        } catch {
+            update(
+                "failed",
+                message: (error as? WireGuardError)?.localizedDescription
+                    ?? WireGuardError.unavailable.localizedDescription, attempt: attempt)
+        }
+    }
+    private func startProtocol(
+        credential: ConnectionCredential, attempt previousAttempt: UUID? = nil,
+        tunnelPort: Int = 0, tunnelToken: String? = nil
+    ) {
+        generation = previousAttempt ?? UUID()
         let attempt = generation
         state = .connecting
         message = "Connecting…"
@@ -76,6 +143,8 @@ import SwiftTerm
         } else if let desktop {
             let client = URRDPClient()
             rdp = client
+            client.tunnelPort = tunnelPort
+            client.tunnelToken = tunnelToken
             client.onStatus = { [weak self] status, message in
                 DispatchQueue.main.async { self?.update(status, message: message, attempt: attempt) }
             }
@@ -153,6 +222,9 @@ import SwiftTerm
             }
         }
         if !state.active {
+            tunnelTask?.cancel()
+            tunnel?.stop()
+            tunnel = nil
             cancelPrompts()
             stopClipboard()
             desktop?.releaseInput()
@@ -181,6 +253,11 @@ import SwiftTerm
         }
     }
     func disconnect() {
+        generation = UUID()
+        tunnelTask?.cancel()
+        tunnelTask = nil
+        tunnel?.stop()
+        tunnel = nil
         cancelPrompts()
         stopClipboard()
         desktop?.releaseInput()
@@ -220,4 +297,9 @@ import SwiftTerm
     }
     func controlAltDelete() { if state == .connected { rdp?.sendControlAltDelete() } }
     func focus() { if let view = terminal?.view ?? desktop { view.window?.makeFirstResponder(view) } }
+}
+
+@MainActor private final class WeakRemoteSession {
+    weak var value: RemoteSession?
+    init(_ value: RemoteSession) { self.value = value }
 }

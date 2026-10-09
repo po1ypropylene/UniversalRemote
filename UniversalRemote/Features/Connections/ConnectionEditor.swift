@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 struct ConnectionEditor: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: \SavedWireGuard.name) private var tunnels: [SavedWireGuard]
+    @State private var showWireGuard = false
     @Query private var saved: [SavedConnection]
     @ObservedObject var workspace: Workspace
     let request: EditorRequest
@@ -33,37 +35,50 @@ struct ConnectionEditor: View {
                 Spacer()
             }.padding(24)
             Divider()
-            ScrollView {
-                Form {
-                    Section("Connection") {
-                        TextField("Name", text: $draft.name, prompt: Text("Defaults to host name"))
-                        Picker("Protocol", selection: $draft.kind) {
-                            ForEach(RemoteProtocol.allCases) { Text($0.rawValue).tag($0) }
-                        }.pickerStyle(.segmented)
-                        TextField(
-                            "Server address", text: $draft.host, prompt: Text("192.168.1.10 or server.example.com"))
-                        Text("Enter the computer’s IP address or host name, without a protocol prefix or port.")
-                            .font(.caption).foregroundStyle(.secondary)
-                        TextField("Port", value: $draft.port, format: .number.grouping(.never))
-                        Text(
-                            "The standard \(draft.kind.rawValue) port is \(draft.kind.defaultPort.formatted(.number.grouping(.never))). Change it only if your server uses a different port."
-                        )
+            Form {
+                Section("Connection") {
+                    TextField("Name", text: $draft.name, prompt: Text("Defaults to host name"))
+                    Picker("Protocol", selection: $draft.kind) {
+                        ForEach(RemoteProtocol.allCases) { Text($0.rawValue).tag($0) }
+                    }.pickerStyle(.segmented)
+                    TextField(
+                        "Server address", text: $draft.host, prompt: Text("192.168.1.10 or server.example.com"))
+                    Text("Enter the computer’s IP address or host name, without a protocol prefix or port.")
                         .font(.caption).foregroundStyle(.secondary)
-                        TextField("Username", text: $draft.username)
-                        if draft.kind == .rdp {
-                            TextField("Domain", text: $draft.domain, prompt: Text("Optional"))
-                        }
-                        if draft.kind == .ssh {
-                            Picker("Authentication", selection: $draft.authentication) {
-                                ForEach(SSHAuthentication.allCases) { Text($0.title).tag($0) }
+                    TextField("Port", value: $draft.port, format: .number.grouping(.never))
+                    Text(
+                        "The standard \(draft.kind.rawValue) port is \(draft.kind.defaultPort.formatted(.number.grouping(.never))). Change it only if your server uses a different port."
+                    )
+                    .font(.caption).foregroundStyle(.secondary)
+                    TextField("Username", text: $draft.username)
+                    if draft.kind == .rdp {
+                        TextField("Domain", text: $draft.domain, prompt: Text("Optional"))
+                        Picker("WireGuard connection", selection: $draft.wireGuardID) {
+                            Text("None — connect directly").tag(nil as UUID?)
+                            ForEach(tunnels) { Text($0.name).tag(Optional($0.id)) }
+                            if let id = draft.wireGuardID, !tunnels.contains(where: { $0.id == id }) {
+                                Text("Unavailable profile").tag(Optional(id))
                             }
                         }
-                        credentialFields
+                        Button("Manage WireGuard Connections…") { showWireGuard = true }
+                        if draft.wireGuardID != nil {
+                            Text(
+                                "Only this RDP session uses WireGuard. The server address must be reachable inside the tunnel."
+                            )
+                            .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
-                    DisclosureGroup(draft.kind == .ssh ? "Terminal options" : "Display options") { appearance }
-                    DisclosureGroup("Sharing & server identity") { advanced }
-                }.formStyle(.grouped).disclosureGroupStyle(ConnectionOptionsStyle()).padding(.vertical, 8)
-            }.frame(height: 530)
+                    if draft.kind == .ssh {
+                        Picker("Authentication", selection: $draft.authentication) {
+                            ForEach(SSHAuthentication.allCases) { Text($0.title).tag($0) }
+                        }
+                    }
+                    credentialFields
+                }
+                DisclosureGroup(draft.kind == .ssh ? "Terminal options" : "Display options") { appearance }
+                DisclosureGroup("Sharing & server identity") { advanced }
+            }.formStyle(.grouped).disclosureGroupStyle(ConnectionOptionsStyle()).padding(.vertical, 8)
+                .frame(height: 530)
             Divider()
             HStack {
                 if let error {
@@ -81,6 +96,7 @@ struct ConnectionEditor: View {
                 ).keyboardShortcut(.defaultAction).disabled(draft.validationMessage != nil)
             }.padding(18)
         }.frame(width: 760)
+            .sheet(isPresented: $showWireGuard) { WireGuardLibrary() }
             .onAppear {
                 do { if let stored = try CredentialStore.load(draft.id) { credential = stored } } catch {
                     self.error = error.localizedDescription
@@ -181,6 +197,11 @@ struct ConnectionEditor: View {
             error = "Choose a private key first."
             return
         }
+        if draft.kind == .rdp, let id = draft.wireGuardID, !tunnels.contains(where: { $0.id == id }) {
+            error = WireGuardError.unavailable.localizedDescription
+            return
+        }
+        if draft.kind == .ssh { draft.wireGuardID = nil }
         let hasCredential =
             draft.authentication == .privateKey ? credential.privateKey != nil : !credential.password.isEmpty
         do {
