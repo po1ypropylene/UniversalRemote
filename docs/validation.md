@@ -231,3 +231,144 @@ The display tests use a disposable native window; real-server resolution
 negotiation, visual quality on different Retina displays and interactive scrolling
 performance remain unverified. A server may return a different starting resolution,
 which becomes the scrollable desktop size. No commit or publication was performed.
+
+
+## Initial SFTP file transfer — 9 October 2026
+
+- Rebuilt the pinned native dependencies. Seventeen core tests, seven SSH tests,
+  four TLS RDP tests, five NLA RDP tests and four protected-file synthetic probe
+  checks passed. The protected probe fixtures use disposable input; the user's
+  private server JSON and saved profiles/credentials were not read.
+- Twelve SFTP checks passed against a disposable, loopback-only server: binary
+  upload/download equality, encrypted private-key and interactive authentication,
+  empty files, missing folders/files, directory-download rejection, local/remote
+  collisions, a destination appearing during transfer, cancellation cleanup and
+  subsystem refusal with continued terminal input/resize. Unicode names and
+  symlink classification were checked; exactly one host-key approval per shared
+  SSH/SFTP connection was required. Terminal input/resize passed during transfers.
+  The collision test also verified that the existing remote bytes were unchanged.
+- A separate sandboxed review app hosted the production SFTPController/SFTPView
+  with synthetic data and the actual native SSH adapter. Visually reviewed the
+  two-pane layout, selected an owned disposable directory with NSOpenPanel, opened
+  local/server subfolders, returned to the parent server folder, uploaded/downloaded
+  through the buttons and observed both refreshed lists. Byte equality and absence
+  of leftover local staging files were verified independently. The review app
+  and fixture server were closed. It did not load SwiftData or Keychain, read the
+  clipboard or contact a real server.
+- The Release app passed final bundle signature, macOS 27/arm64, dependency,
+  pre-UI loader and sandboxed WireGuard helper verification. App Sandbox remains
+  enabled; user-selected file access is now read/write for explicit local folder
+  selection. Repository hygiene and diff whitespace checks passed.
+
+This is a first implementation: one regular file per transfer, no recursive
+folders, queue, overwrite/resume, drag-and-drop, remote metadata editing or
+SFTP-only accounts. Downloads publish only after completion and never replace an
+existing destination. Cancellation disconnects the shared SSH session; interrupted
+uploads may leave partial server files. Local destinations require hard-link
+support. UTF-8 listings are bounded to 20,000 items; the server must supply file
+attributes and enable its SFTP subsystem. The sandboxed UI review covered the
+file pane, while the full Terminal/Files/Split session composition was build-checked.
+Real-server SFTP, long transfers, network changes, large directories, filesystem
+variants, VoiceOver and split-view interaction remain unverified. No commit or
+publication was performed.
+
+
+## SFTP file actions and recursive selections — 9 October 2026
+
+- Thirty-nine synthetic SFTP checks passed: the original twelve protocol cases,
+  nineteen native tree/action checks and eight production-controller local-action
+  checks. Coverage includes nested/empty folders and Unicode/binary byte equality,
+  server copy/move/rename/mkdir/delete, cross-side moves, no-overwrite collisions,
+  descendant refusal, link preflight, recursion bounds, source metadata changing
+  during a move, local multi-copy/cut/rename/mkdir and cancellation. The changed-source
+  test completed its destination copy but refused deletion; the source remained
+  readable. Failed cut/paste preserved its source and buffered entry. The local
+  controller checks run outside App Sandbox with disposable files.
+- In the separate sandboxed review app, Command-click selected a local folder and
+  file together. Right-click exposed the selection-aware menus and uploaded both;
+  the server listing refreshed. Independently verified the nested file bytes,
+  empty directory and second selected file. Server Copy/Paste into another folder
+  and rename through the sheet passed. Inspected and cancelled the cross-side move
+  confirmation. No real files/servers, saved profiles, credentials or clipboard
+  contents were read; Copy Path was source-reviewed without changing the clipboard.
+- Seventeen core tests, seven SSH cases, four TLS RDP cases, five NLA RDP cases and
+  four protected-probe synthetic checks passed. Final Release build and final bundle
+  signatures/platform/dependencies/loader/sandboxed-helper verification passed.
+  Repository hygiene, shell syntax and diff whitespace checks passed. The local
+  test executable/data paths were separated after a repeat-run naming collision;
+  the complete SFTP suite then passed again.
+
+Open/Reveal, macOS Trash, cross-volume local moves, network interruption during
+recursive deletion, large production trees and concurrent remote writers still
+need broader integration testing. The UI review preceded the final local-copy
+cancellation hardening; that hardening passed controller tests and the Release
+build. Server copies need temporary local disk space. Move safety uses metadata,
+not a transactional content snapshot; sources must remain quiescent. Batches stop
+on the first failure, retain completed destinations and can leave partial trees.
+SFTP cancellation disconnects SSH. Remote deletion is permanent and confirmed;
+local deletion requests Trash. Remote Open creates a temporary local snapshot with
+no automatic edit upload. No real remote files were changed, and no commit or
+publication was performed.
+
+
+## SFTP drag/drop, throughput and usability — 9 October 2026
+
+- Forty-eight SFTP checks passed, adding upload/download cancellation with continued
+  terminal input and subsequent file listing on the same login, multi-file/folder
+  drag-provider transfers in both directions, a Finder-style file-URL provider and
+  invalid-token refusal. Binary/nested-file equality was verified through the actual
+  controller/native path. The provider tests use disposable inputs outside App Sandbox.
+- A controlled 16 MiB upload through an owned proxy with 10 ms delay each direction
+  measured 1.06 MiB/s with a 32 KiB window and 30.15 MiB/s with a 1 MiB window (28.4x).
+  An earlier sample measured 0.78/29.81 MiB/s (38.5x). The comparison changes only
+  window size in otherwise identical new code. It validates the pipelining bottleneck,
+  not production-server speed or a guaranteed improvement on all networks.
+- The sandboxed review app used an owned directory as a substitute for Home.
+  Folder permission was granted explicitly, saved as a security-scoped bookmark,
+  and restored across relaunch with its contents automatically listed. The real
+  user's Home was not browsed during testing. Source/build checks confirm the real
+  account Home lookup and hidden picker label in production composition.
+- Mouse automation selected drag rows but did not complete a visible drop. The
+  final implementation uses macOS List itemProvider/ForEach.onInsert plus folder
+  and background drop handlers; their underlying provider/recursive-transfer path
+  passed. Actual mouse dragging, Finder sandbox-extension delivery and dropping
+  onto folder rows still need interactive verification; they are not UI passes.
+- A new cancellation fixture once crashed while its process exited during worker
+  crypto cleanup. Its generated crash stack (symbols only) and debugger run identified
+  exit/cleanup overlap; both new native fixtures now await terminal-worker teardown
+  before process exit. Complete cancellation/drop/regression suites then passed.
+  Routine file cancellation drains/closes the active handle and keeps SFTP/SSH alive.
+- Seventeen core tests, seven SSH, four TLS RDP, five NLA RDP and four protected-probe
+  synthetic checks passed. Final Release build and signatures/platform/dependency/
+  loader/sandboxed-helper verification passed. Formatting, hygiene, shell syntax and
+  diff whitespace checks passed. No real server files, private input, credentials,
+  clipboard contents or user database were read/changed; no commit/publication.
+
+Home access still needs the initial macOS folder approval; no blanket filesystem
+permission was introduced. Cancel can finish its already-submitted 1 MiB upload
+window before closing the handle. Interrupted uploads/trees can leave partial
+files, and genuine network/cleanup failures can still disconnect SSH. Dragging
+server items directly to Finder remains deferred. Production throughput, prolonged
+sessions and actual mouse/Finder drag interoperability remain unverified.
+
+## Maintenance scripts — 9 October 2026
+
+- Eight disposable maintenance checks passed: generated-artifact deletion while
+  retaining tracked fixtures/logs and protected input; generated symlink unlinking
+  without deleting its target; refusal of tracked generated outputs; stable-major
+  tag selection and annotated-tag commit peeling; pin rollback on mocked resolution
+  failure; Keychain-failure preservation; running-app refusal; and successful scoped
+  Library cleanup with mocked platform commands.
+- All three script help/preview entry points passed. The Security.framework deletion
+  helper compiled with a disposable module cache; it was not executed against the
+  user's Keychain. It uses a noninteractive authentication context and never reads
+  credential values.
+- Repository hygiene and diff whitespace checks passed. No actual dependency pins
+  were changed, app data reset, private test input read, live servers contacted,
+  commit created or publication performed. Existing unrelated changes were retained.
+
+Upstream network resolution, a complete real dependency upgrade/build/protocol
+validation cycle, and credential deletion against a real macOS Keychain were not
+exercised. License notices require upstream review when applying an upgrade.
+Permission/authorization failures in a real reset can leave a partial deletion and
+are reported as failures; rerun after resolving access.

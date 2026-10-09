@@ -4,12 +4,36 @@ import SwiftUI
 struct SessionPane: View {
     @ObservedObject var session: RemoteSession
     @ObservedObject var workspace: Workspace
+    private func terminalView(_ terminal: TerminalController) -> some View {
+        TerminalSurface(controller: terminal).padding(8).background(
+            SwiftUI.Color(nsColor: terminal.view.nativeBackgroundColor))
+    }
+    private var filesView: some View {
+        SFTPView(controller: session.files, connected: session.state == .connected)
+    }
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
                 if let terminal = session.terminal {
-                    TerminalSurface(controller: terminal).padding(8).background(
-                        SwiftUI.Color(nsColor: terminal.view.nativeBackgroundColor))
+                    VStack(spacing: 0) {
+                        HStack {
+                            Picker("SSH workspace", selection: $session.sshMode) {
+                                ForEach(SSHWorkspaceMode.allCases) { mode in Text(mode.rawValue).tag(mode) }
+                            }.labelsHidden().pickerStyle(.segmented).frame(width: 280)
+                            Spacer()
+                        }.padding(8).background(.bar)
+                        switch session.sshMode {
+                        case .terminal:
+                            terminalView(terminal)
+                        case .files:
+                            filesView
+                        case .split:
+                            VSplitView {
+                                terminalView(terminal).frame(minHeight: 160)
+                                filesView.frame(minHeight: 240)
+                            }
+                        }
+                    }
                 } else if let desktop = session.desktop {
                     DesktopSurface(view: desktop)
                 }

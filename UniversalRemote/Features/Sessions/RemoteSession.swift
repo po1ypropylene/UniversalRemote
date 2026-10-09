@@ -12,6 +12,8 @@ import SwiftTerm
     @Published var message = "Waiting for credentials"
     @Published var remoteTitle = ""
     @Published var logs: [SessionLog] = []
+    @Published var sshMode = SSHWorkspaceMode.terminal
+    let files = SFTPController()
     let terminal: TerminalController?
     let desktop: RDPDesktopView?
     private var ssh: URSSHClient?
@@ -112,6 +114,20 @@ import SwiftTerm
         if let terminal {
             let client = URSSHClient()
             ssh = client
+            files.attach(client)
+            let fileController = files
+            client.onFiles = { [weak self, fileController] id, result, error in
+                DispatchQueue.main.async {
+                    guard let self, self.generation == attempt else { return }
+                    fileController.receive(id: id, result: result, error: error)
+                }
+            }
+            client.onFileProgress = { [weak self, fileController] id, bytes, total in
+                DispatchQueue.main.async {
+                    guard let self, self.generation == attempt else { return }
+                    fileController.receiveProgress(id: id, bytes: bytes, total: total)
+                }
+            }
             terminal.sendBytes = { [weak client] in client?.send($0) }
             terminal.resize = { [weak client] cols, rows in client?.resizeColumns(cols, rows: rows) }
             terminal.updateTitle = { [weak self] title in self?.remoteTitle = title }
@@ -221,6 +237,7 @@ import SwiftTerm
         logs.append(SessionLog(message: message))
         if logs.count > 200 { logs.removeFirst(logs.count - 200) }
         if state == .connected {
+            if profile.kind == .ssh && sshMode != .terminal { files.showFiles() }
             desktop?.inputEnabled = true
             desktop?.requestResize()
             startClipboardTimer()
@@ -230,6 +247,7 @@ import SwiftTerm
             }
         }
         if !state.active {
+            files.disconnected()
             tunnelTask?.cancel()
             tunnel?.stop()
             tunnel = nil
@@ -272,6 +290,7 @@ import SwiftTerm
         desktop?.cancelPendingDisplayWork()
         desktop?.releaseInput()
         desktop?.inputEnabled = false
+        files.disconnected()
         ssh?.disconnect()
         rdp?.disconnect()
         generation = UUID()
@@ -306,7 +325,10 @@ import SwiftTerm
         clipboardTimer = nil
     }
     func controlAltDelete() { if state == .connected { rdp?.sendControlAltDelete() } }
-    func focus() { if let view = terminal?.view ?? desktop { view.window?.makeFirstResponder(view) } }
+    func focus() {
+        guard profile.kind != .ssh || sshMode != .files else { return }
+        if let view = terminal?.view ?? desktop { view.window?.makeFirstResponder(view) }
+    }
 }
 
 @MainActor private final class WeakRemoteSession {

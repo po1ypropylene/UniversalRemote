@@ -1,8 +1,8 @@
 # Universal Remote
 
 A native macOS 27+ workspace for Apple silicon, with SSH terminals and RDP desktops, built with SwiftUI.
-Phase 1 provides SSH console sessions and RDP remote control. SFTP, SCP, WebDAV,
-other protocols, and file transfer are reserved for later releases.
+SSH connections provide terminal sessions and SFTP file transfer; RDP provides remote control.
+SCP, WebDAV and other protocols are reserved for later releases.
 
 ## Run the built app
 
@@ -68,10 +68,69 @@ Keys follow the app’s existing credential storage policy. See
 - Keepalives and explicit cancellation.
 - Terminal copy/paste uses the normal macOS commands. Remote escape sequences
   cannot read or replace the local clipboard.
-- No local shell process, SFTP subsystem, file browser, or SSH agent is started.
-  Normal remote shell commands may of course read/write files on the server.
+- SFTP opens on demand over the same authenticated SSH connection. No local shell
+  process or SSH agent is started. Normal remote shell commands may also read/write
+  files on the server.
 - `~/.ssh/config`, ProxyCommand, jump hosts, forwarding, SSH certificates, and
   hardware-backed private keys are outside this release's supported configuration.
+
+### SFTP file transfer
+
+Connect with an existing SSH profile, then choose **Files** in its session tab.
+**Split** keeps the terminal above the local and server file panels; **Terminal**
+returns to the full terminal. Switching views preserves the same signed-in session.
+The server must allow both an interactive SSH shell and its SFTP subsystem.
+
+- The left panel starts at your actual Home folder. macOS asks for folder access
+  the first time; approve Home to remember that permission for future sessions.
+  Browse its subfolders or choose another local folder. No credentials are added.
+- The right panel starts in the server's SFTP home folder. Double-click folders,
+  use the parent arrow, type a server path, or refresh either panel.
+- Select files and folders with Command-click or Shift-click, then choose
+  **Upload →** or **← Download**. Folders include their nested contents and empty
+  folders. Selected items run sequentially; the batch stops at the first error.
+- Right-click a selection for **Open**, **Rename**, **Cut**, **Copy**, **Copy Path(s)**,
+  upload/download, **Paste into this folder**, **New Folder**, **Select All** and
+  **Refresh**. Local items also offer **Reveal in Finder** and **Move to Trash**;
+  server items offer confirmed permanent **Delete**, including folder contents.
+- Copy/Cut uses a file buffer within the current SSH tab. Navigate or choose
+  another local folder, then Paste on either side. It supports local-to-local,
+  server-to-server and cross-side copies/moves. Copy Path writes newline-separated
+  paths to the Mac clipboard; Paste does not read the Mac clipboard. Disconnect
+  clears the file buffer. Copied local sources retain their selected-folder access.
+- Same-side moves rename items when possible. Cross-side moves copy first and check
+  source metadata again before removing originals. Moves require confirmation;
+  completed batch items stay completed when a later item fails. Work with sources
+  that other clients are not editing: SFTP metadata cannot establish a transactional
+  snapshot or detect every concurrent content change.
+- Opening a local file uses its default Mac application. **Open local copy…** on
+  a server file downloads a snapshot into the app's temporary previews folder, then
+  opens it locally. Edits are not uploaded automatically. Previews remain temporary
+  local files until macOS removes them; do not rely on them for saved work.
+- Existing destination files and folders are never replaced or merged. File
+  downloads/local copies appear with their final name only after completion;
+  failed file copies remove their temporary file. Failed folder operations may
+  leave completed files or partial folders at the destination. Refresh to inspect.
+- Drag selected local files/folders onto the server list to upload; drag server
+  items onto the local list to download. Folder rows are destinations; dropping on
+  the list background uses the displayed folder. Finder files/folders can also be
+  dropped onto the server panel. Dragging copies items and does not remove sources.
+- **Cancel** stops current file work and the remaining batch while retaining the
+  SSH terminal/login. A pending network request drains before its file handle closes;
+  up to the current 1 MiB upload window may finish. Interrupted uploads and recursive
+  batches can leave partial destinations. Closing the tab disconnects everything.
+  Completed rename/Trash actions cannot be undone by cancellation.
+
+Symbolic links and special files are displayed but not followed. Recursive copying,
+transferring or deleting a tree containing them fails its preflight without modifying
+that tree's destination or removing its sources. Tree operations are limited to
+20,000 items and 64 folder levels; remote listings require UTF-8 names and file-type
+attributes. Server-to-server copies stream through a temporary local tree and need
+sufficient local disk space. Local file publication requires hard-link support.
+Overwrite/merge, resume, dragging server files directly into Finder, and SFTP-only accounts remain unsupported.
+File operation stalls disconnect SSH after 30 seconds without transfer progress;
+the terminal remains usable during normal transfers. Real-server SFTP interoperability
+remains unverified.
 
 ### RDP
 
@@ -144,6 +203,60 @@ rewrites load paths, and signs the copied libraries with the build's signing
 identity. Builds target arm64 only with a macOS 27 minimum. The platform stamp
 forces native dependency rebuilding when the target changes. Native dependency updates require changing the pins, rebuilding, and
 rerunning the protocol checks.
+
+## Maintenance scripts
+
+All three scripts preview their work by default. Python 3 is required; the updater
+also uses Git, Go and Xcode for the selected components. Run them from any directory.
+
+```sh
+# Preview upstream releases; --latest stays in the current native/SwiftTerm major.
+scripts/update-dependencies.py --latest
+# Apply pins/checksums and rebuild. Protocol verification is still required.
+scripts/update-dependencies.py --latest --apply --build
+# Or update just one component to a selected stable release:
+scripts/update-dependencies.py --freerdp 3.32.1 --apply --build
+
+# Preview/remove generated builds, dependency caches, logs and synthetic test outputs.
+scripts/clean-project.py
+scripts/clean-project.py --apply
+
+# Preview a permanent app-data reset; quit the app before applying it.
+scripts/clean-user-data.py
+scripts/clean-user-data.py --apply
+```
+
+The updater writes native commit pins, SwiftTerm's exact requirement and resolved
+package lock, WireGuard's Go manifest/checksums, and the third-party version inventory.
+It resolves WireGuard's dependency graph without independently upgrading gVisor.
+Pin/manifest resolution failures restore the original tracked file contents;
+downloaded caches may remain. Successfully applied pins remain if a subsequent
+build fails. Old native outputs and synthetic RDP builds are invalidated when
+native pins change. Inspect the diff, review upstream license/NOTICE changes and
+refresh the bundled notices in `ThirdParty` as needed, then run the verification
+commands in AGENTS.md before relying on new versions. The updater does not install
+or upgrade Xcode, CMake, Python, Go, or test-only Paramiko.
+
+Project cleanup removes `.build` (including built apps, release DMGs and generated
+fixtures), `Vendor/Native`, `DerivedData`, `build`, and untracked ignored logs/Python
+caches. It preserves tracked source fixtures, `.local-testing`, and user Library and
+Keychain data. Stop builds and fixture servers before cleaning. Rebuild with
+`scripts/build.sh`; recreate the test virtual environment and RDP fixture when needed.
+
+User-data cleanup permanently removes this account's Universal Remote container,
+local credential fallback, preferences, cached/saved state and temporary SFTP previews.
+This includes saved connections/folders, WireGuard profiles/keys, passwords/imported
+private-key copies, server trust, settings and local-folder bookmarks. It deletes only
+generic-password Keychain items in `com.peterpo.UniversalRemote.credentials`, without
+reading/exporting credentials. Quit the app and tunnel helper, run as your own user
+without sudo, and retain any exports you need first. Keychain authorization or macOS
+Library protections may block deletion; failures return a nonzero status and can leave
+a partial reset. Resolve the reported access issue and retry. Other apps' data,
+original imported key/config files, the installed app, repository and protected test
+input are preserved. No system privacy permissions are reset.
+
+Maintenance regression checks use disposable files and mocked credential deletion:
+`python3 -m unittest discover -s Tests/Maintenance -v`.
 
 ## Version and DMG for a release
 
@@ -226,6 +339,8 @@ swift test --scratch-path .build/core-tests
 python3 -m venv .build/test-venv
 .build/test-venv/bin/python -m pip install 'paramiko==4.0.0'
 scripts/test-ssh.sh
+scripts/test-sftp.sh
+scripts/test-sftp-throughput.sh
 
 # Build an isolated, loopback-only synthetic RDP server.
 scripts/prepare-rdp-fixture.sh

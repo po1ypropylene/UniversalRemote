@@ -35,7 +35,7 @@ Xcode's synchronized source group discovers app files automatically. Package.swi
 
 Workspace is main-actor observable state and owns live RemoteSession objects. Each session snapshots a ConnectionDraft, owns protocol-specific persistent surfaces and native client, and uses a generation ID to ignore callbacks from an earlier attempt. SwiftUI pane re-creation does not reconnect the transport. Closing a tab disconnects it; selection releases pressed input and restricts RDP clipboard sharing to the selected session.
 
-Each native worker owns its handles; queued input is bounded. SSH performs socket/handshake/host-key validation before authentication, requests a PTY and shell, and delivers output with main-thread backpressure. It does not start SFTP or any local shell/agent. RDP snapshots GDI pixels into a latest-frame mailbox: rendering discards superseded frames instead of accumulating an unbounded queue. Metal draws a fitted desktop; pointer coordinates account for fitted bounds.
+Each native worker owns its handles; queued input is bounded. SSH performs socket/handshake/host-key validation before authentication, requests a PTY and shell, and delivers output with main-thread backpressure. SFTP opens on demand on the same authenticated session; no local shell/agent is started. RDP snapshots GDI pixels into a latest-frame mailbox: rendering discards superseded frames instead of accumulating an unbounded queue. Metal draws a fitted desktop; pointer coordinates account for fitted bounds.
 
 Native trust/interactive callbacks wait on PromptWaiter while the main actor presents a sheet. Resolution is single-use and cancellation/timeout unblocks workers. Disconnect resolves pending prompts, interrupts the transport, stops clipboard timers and invalidates callbacks. Never block the main actor waiting for a native worker or a prompt.
 
@@ -55,7 +55,7 @@ Version.xcconfig is the sole version/build source, referenced by both Xcode targ
 
 ## Deliberately deferred
 
-SFTP/SCP/WebDAV/file transfer; SSH config/agent/jump hosts/forwarding/certificates/hardware keys; RDP Gateway/RemoteApp/microphone capture/devices/drive redirection/multiple monitors/hardware video; nested folders/cloud sync/updater. The source license is undecided. Production interoperability and distribution are not claimed by synthetic fixture passes.
+SCP/WebDAV; SFTP overwrite/merge/resume/Finder download promises; SSH config/agent/jump hosts/forwarding/certificates/hardware keys; RDP Gateway/RemoteApp/microphone capture/devices/drive redirection/multiple monitors/hardware video; nested folders/cloud sync/updater. The source license is undecided. Production interoperability and distribution are not claimed by synthetic fixture passes.
 
 ## Connection editor and desktop negotiation — 8 October 2026
 
@@ -165,3 +165,142 @@ Fit remains aspect-preserving and optionally uses existing dynamic server resizi
 Sizing initially excludes scrollbars so Match window starts without scroll overflow.
 If the server negotiates another resolution, its delivered frame determines the
 actual desktop bounds.
+
+
+## Shared SSH/SFTP workspace — 9 October 2026
+
+Each SSH RemoteSession owns an SFTPController alongside its persistent terminal.
+Terminal, Files and vertically resizable Split are presentation choices within
+one session tab, preserving the existing profile, credential, endpoint trust and
+restoration identities. No SwiftData schema or protocol enum changes are needed.
+Files opens SFTP lazily on the already authenticated libssh2 session. A subsystem
+refusal reports a file error while leaving the SSH terminal available.
+
+The SSH worker exclusively owns shell/SFTP handles and a bounded file-request
+queue. It services terminal input/output and resize between file chunks and socket
+waits, retaining synchronous main-thread terminal backpressure. File I/O uses
+32 KiB buffers, listing count/UTF-8 bounds, and throttled progress. Only one file
+operation runs at once. UI callbacks check the session generation and operation ID;
+disconnect clears queued work and makes late results inert. Cancellation and
+operation timeouts disconnect the shared transport to avoid abandoning a pending
+libssh2 request and reusing its state. Listings have a 30-second bound; transfers
+have a 30-second no-progress bound, and handle closing has a five-second bound.
+
+Local access uses an explicit directory NSOpenPanel and a retained security scope.
+The app's user-selected-files entitlement is read/write; App Sandbox remains on.
+No bookmarks or broad filesystem entitlements are added. Upload sources are
+regular files opened with O_NOFOLLOW. Server creation uses CREAT|EXCL; downloads
+use an owner-only unique staging file inside the selected destination directory,
+fsync and a no-replacement hard link to publish the final name, then remove staging.
+Existing files are never replaced even if a collision appears after listing.
+Interrupted uploads remain on the server for inspection; automatic pathname-based
+cleanup could delete a replacement created by another client. File contents and
+paths are not included in protocol diagnostics or session logs.
+
+The browser does not follow listed symlinks, replace/resume files or support
+SFTP-only accounts. The context-menu/recursive extension below supersedes the
+original single-file transfer restriction. Servers
+without POSIX file type attributes may show nontransferable items. Hard-link support
+is required in the local destination filesystem; unsupported publication fails with
+no replacement. A server or local process can change a source during transfer;
+byte-count checks detect size changes but do not establish cryptographic integrity.
+
+
+## File actions, multi-selection and recursive work — 9 October 2026
+
+Each pane uses Set<String> selection with SwiftUI's selection-aware context menu
+and primary action. Right-click acts on the framework's contextual selection,
+including multiple files/folders. A session-scoped file buffer snapshots source
+paths and retains separate security-scoped access to copied/cut local sources.
+It supports paste on either side without reading/writing the system clipboard;
+Copy Path alone writes explicitly requested paths. Disconnect clears the buffer.
+No persistence/credential/trust identities or new filesystem permissions are added.
+
+SFTPController sequences top-level jobs and stops the batch at the first failure.
+Successfully moved entries leave the cut buffer; unfinished entries remain.
+Native tree operations preflight a sorted manifest with lstat, rejecting symlinks,
+special files, invalid names, more than 20,000 entries or 64 folder levels before
+creating destinations. Dot entries are ignored; unsupported real entries are errors
+rather than silently skipped. Empty directories are preserved. The existing leaf
+streaming, no-overwrite publication, terminal backpressure and request/generation
+checks remain. Completed leaves or directories can remain after later errors.
+
+Server mkdir/rename/remove use SFTP directly; rename requests no overwrite and
+checks the destination first. Same-side Cut uses rename; Copy downloads into an
+owner-only temporary tree then uploads it and cleans that staging tree. Cross-side
+Cut copies the complete top-level tree, rechecks its manifest and only then deletes
+its source bottom-up. Changed sources stop deletion; deletion failures can leave
+some originals after a complete destination copy. Source metadata checks also run
+before individual copy/delete steps. Remote metadata has server-specific precision;
+concurrent same-size writes can evade it. These operations require quiescent sources
+and do not provide a transaction, rollback or cryptographic snapshot guarantee.
+
+Local actions run off the main actor. Same-volume moves use renamex_np(RENAME_EXCL);
+cross-volume moves copy before verifying metadata and removing sources. Local copies
+preflight the tree, use O_NOFOLLOW/32 KiB streaming, owner-only staging, fsync and
+no-replacement links. A per-batch cancellation flag stops queued/chunk work; the
+controller is retained until the current local action ends to keep its folder scope
+alive. App Sandbox remains on. A completed rename/Trash action cannot be cancelled
+retroactively. Local deletion uses macOS Trash; recursive server deletion has an
+explicit permanent-delete confirmation. Paste for Cut has a move confirmation.
+
+Open/Reveal use NSWorkspace. Remote Open downloads a temporary snapshot to an
+owner-only per-open folder, then asks the default application to open it. These
+previews are retained for the OS's temporary-file lifecycle, not removed on tab close
+while another app could be editing them, and are never automatically uploaded.
+Copy/delete preflight still rejects links and special files. External editor access,
+Trash and non-APFS filesystem behavior need broader production validation.
+
+
+## Drag/drop, pipelining, Home and transfer cancellation — 9 October 2026
+
+The pane starts at the account Home from getpwuid (NSHomeDirectory is the app
+container under App Sandbox). Until permission exists, file access is gated and
+an NSOpenPanel starts at Home. A security-scoped bookmark for an approved Home is
+stored in app preferences and refreshed if stale; other chosen folders remain
+session-scoped. No broad filesystem entitlement or sandbox exception is added.
+The mode picker hides its visible label while keeping the accessibility name.
+
+macOS List rows use itemProvider and ForEach.onInsert, with folder/background drop
+handlers. Internal drags carry an opaque token as a standard string item provider;
+only the matching session's captured source paths can produce jobs. Multiple selected
+rows share a token. No clipboard is read and dropped text is not interpreted as
+paths. Finder file-URL providers load through loadObject, with scoped access and
+provider lifetimes retained until completion. Drop jobs reuse recursive validation,
+no-overwrite rules and the batch queue. They always copy; cancellation/disconnect
+invalidates late provider callbacks. Downloads directly to Finder need file promises
+and remain deferred.
+
+Uploads use a bounded 1 MiB application window, allowing pinned libssh2 to pipeline
+its smaller SFTP WRITE packets; downloads use 256 KiB windows. TCP_NODELAY avoids
+small-packet delays. Readiness directions are captured before servicing the shell,
+since terminal reads can change libssh2's last-operation directions; polling uses
+the captured SFTP directions. Terminal pumping remains bounded/throttled, with its
+existing main-thread backpressure. The controlled 32 KiB/1 MiB latency comparison
+uses identical new code apart from upload window size, not an old-app binary.
+
+Cancel sets a separate file-work flag, stops subsequent batch/tree jobs, and drains
+the already submitted request/window before closing its active handle. It retains
+the idle SFTP channel and authenticated SSH shell. Read state resets through handle
+close; write windows finish their acknowledgements before abandoning their buffers.
+Local copies use their existing cancellation token. The UI waits for cleanup and
+shows Cancelled without presenting a failure alert. Partial uploaded files/completed
+folder leaves may remain; sources are retained until a move actually completes.
+Genuine transport/cleanup timeouts can still disconnect a broken SSH connection.
+
+## Maintenance scripts — 9 October 2026
+
+The dependency updater previews upstream pins, applies exact native revisions and
+Swift/Go lockfiles, rolls back tracked manifests on resolution failure, and
+invalidates generated native outputs. Current-major stable discovery limits
+accidental native ABI changes; explicit versions remain available. WireGuard's
+transitive graph is resolved together rather than replacing gVisor independently.
+Upstream notices still require review before distribution.
+
+Project cleanup is limited to known generated directories and ignored untracked
+logs/caches. Tracked fixture sources and protected local test input are preserved.
+User-data reset is a separate explicit destructive operation, scoped to the current
+bundle's Library storage and generic-password credential service. It calls
+SecItemDelete without fetching credential values, refuses a running app/helper or
+sudo, and rejects redirected storage paths. Defaults are cleared through the
+preferences service before disk cleanup. No app schema/storage changes are made.

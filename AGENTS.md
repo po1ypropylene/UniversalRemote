@@ -5,7 +5,7 @@ Read README.md, docs/architecture.md, docs/local-testing.md, docs/branding.md an
 ## Product boundaries
 
 - Native SwiftUI app, macOS 27+, **arm64 only**. No Intel/older-macOS compatibility work.
-- Phase 1: SSH console and RDP desktop. No file browser, SFTP/WebDAV, SSH agent requirement or external protocol executable.
+- SSH console and on-demand SFTP file transfer share one authenticated SSH session; RDP provides desktop access. No SCP/WebDAV, SSH agent requirement or external protocol executable.
 - Authentication is in-app password, imported private key, or keyboard-interactive. No agent selection UI.
 - Protocol adapters are independently written. Do not copy code or assets from unrelated projects.
 - Do not spawn subagents unless the user explicitly asks for delegation.
@@ -31,7 +31,7 @@ Xcode uses a synchronized source folder. A file under UniversalRemote is automat
 1. scripts/prepare-dependencies.sh (pinned source; ignored .build and Vendor/Native).
 2. scripts/build.sh (Release, ad-hoc signing, hardened runtime disabled for local development; bundle verifier and loader check included).
 3. swift test --scratch-path .build/core-tests
-4. scripts/test-ssh.sh
+4. scripts/test-ssh.sh; scripts/test-sftp.sh
 5. scripts/prepare-rdp-fixture.sh; scripts/test-rdp.sh; scripts/test-rdp-nla.sh
 6. scripts/test-live-fixtures.sh (protected-file probe against synthetic servers)
 7. python3 scripts/check-repository-hygiene.py
