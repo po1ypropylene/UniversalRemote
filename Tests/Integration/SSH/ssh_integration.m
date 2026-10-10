@@ -81,9 +81,14 @@ int main(int argc, char **argv) {
              authentication:authentication];
         BOOL timedOut = dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC)) != 0;
         [client disconnect];
+        [URSSHClient whenAllDisconnected:^{
+          dispatch_semaphore_signal(done);
+        }];
+        BOOL drained = dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0;
         BOOL expectedFailure =
             [mode isEqualToString:@"reject"] || [mode hasPrefix:@"bad-"] || [mode isEqualToString:@"key-only"];
-        BOOL passed = !timedOut && trusted && (expectedFailure ? failed && !connected : connected && !failed);
+        BOOL passed =
+            !timedOut && drained && trusted && (expectedFailure ? failed && !connected : connected && !failed);
         if ([mode isEqualToString:@"cancel-prompt"])
             passed = !timedOut && trusted && !failed && !connected && prompts == 1 && !credentialsRejected;
         if (!expectedFailure && ![mode hasPrefix:@"cancel"])
@@ -96,6 +101,7 @@ int main(int argc, char **argv) {
         else if (![mode isEqualToString:@"cancel-prompt"])
             passed = passed && prompts == 0;
         passed = passed && (credentialsRejected == [mode hasPrefix:@"bad-"]);
+        passed = passed && drained;
         printf("%s SSH %s\n", passed ? "PASS" : "FAIL", mode.UTF8String);
         return passed ? 0 : 1;
     }

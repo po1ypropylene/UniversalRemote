@@ -15,6 +15,9 @@ import UniformTypeIdentifiers
     let trust: TrustStore
     private let loadCredential: (UUID) throws -> ConnectionCredential?
     private let defaults: UserDefaults
+    private(set) var isShuttingDown = false
+    private var shutdownFinished = false
+    private var shutdownCompletions: [@MainActor @Sendable () -> Void] = []
     var modelContext: ModelContext?
     var selectedSession: RemoteSession? { sessions.first { $0.id == selectedSessionID } }
 
@@ -62,6 +65,7 @@ import UniformTypeIdentifiers
         }
     }
     func connect(_ draft: ConnectionDraft, credential: ConnectionCredential? = nil, persistent: Bool = true) {
+        guard !isShuttingDown else { return }
         guard draft.validationMessage == nil else {
             error = draft.validationMessage
             return
@@ -91,6 +95,7 @@ import UniformTypeIdentifiers
         persistWorkspace()
     }
     func reconnect(_ session: RemoteSession) {
+        guard !isShuttingDown else { return }
         guard let index = sessions.firstIndex(where: { $0.id == session.id }) else { return }
         var draft = session.profile
         let persistent = session.persistent
@@ -126,7 +131,13 @@ import UniformTypeIdentifiers
             persistWorkspace()
         } catch { self.error = error.localizedDescription }
     }
-    func enqueue(_ prompt: SessionPrompt) { prompts.append(prompt) }
+    func enqueue(_ prompt: SessionPrompt) {
+        guard !isShuttingDown else {
+            prompt.waiter.resolve(nil)
+            return
+        }
+        prompts.append(prompt)
+    }
     func cancelPrompts(sessionID: UUID) {
         for prompt in prompts where prompt.sessionID == sessionID { prompt.waiter.resolve(nil) }
         prompts.removeAll { $0.sessionID == sessionID }
@@ -157,7 +168,7 @@ import UniformTypeIdentifiers
             sessions.filter(\.persistent).map { $0.profile.id.uuidString }, forKey: "workspaceConnections")
     }
     func restoreWorkspace(_ saved: [SavedConnection]) {
-        guard sessions.isEmpty, defaults.object(forKey: "restoreWorkspace") as? Bool ?? true else {
+        guard !isShuttingDown, sessions.isEmpty, defaults.object(forKey: "restoreWorkspace") as? Bool ?? true else {
             return
         }
         for id in defaults.stringArray(forKey: "workspaceConnections") ?? [] {
@@ -169,8 +180,38 @@ import UniformTypeIdentifiers
         }
         select(sessions.first?.id)
     }
-    func shutdown() {
+    func shutdown(completion: @escaping @MainActor @Sendable () -> Void) {
+        if shutdownFinished {
+            RunLoop.main.perform(inModes: [.default, .modalPanel, .eventTracking]) {
+                MainActor.assumeIsolated { completion() }
+            }
+            return
+        }
+        shutdownCompletions.append(completion)
+        guard !isShuttingDown else { return }
+        isShuttingDown = true
         persistWorkspace()
         for session in sessions { session.disconnect() }
+        for prompt in prompts { prompt.waiter.resolve(nil) }
+        prompts.removeAll()
+        // Include workers from tabs already closed or replaced by reconnect.
+        let cleanup = DispatchGroup()
+        cleanup.enter()
+        URSSHClient.whenAllDisconnected { cleanup.leave() }
+        cleanup.enter()
+        URRDPClient.whenAllDisconnected { cleanup.leave() }
+        cleanup.enter()
+        WireGuardTransport.shutdownAll { cleanup.leave() }
+        cleanup.notify(queue: .global(qos: .userInitiated)) { [self] in
+            // AppKit can run a nested event loop while awaiting terminateLater.
+            RunLoop.main.perform(inModes: [.default, .modalPanel, .eventTracking]) {
+                MainActor.assumeIsolated {
+                    self.shutdownFinished = true
+                    let completions = self.shutdownCompletions
+                    self.shutdownCompletions.removeAll()
+                    for completion in completions { completion() }
+                }
+            }
+        }
     }
 }

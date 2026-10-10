@@ -67,7 +67,11 @@ int main(int argc, char **argv) {
               audioPlayback:YES];
         BOOL timeout = dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 25 * NSEC_PER_SEC)) != 0;
         [client disconnect];
-        BOOL pass = !timeout && trusted;
+        [URRDPClient whenAllDisconnected:^{
+          dispatch_semaphore_signal(done);
+        }];
+        BOOL drained = dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0;
+        BOOL pass = !timeout && drained && trusted;
         if ([mode isEqualToString:@"reject"] || [mode isEqualToString:@"bad-password"])
             pass = pass && failed && !connected;
         else

@@ -165,6 +165,30 @@ read or changed. No commit or publication was performed.
   were not repeated beyond the protected-probe RDP check. Test processes/directories,
   logs and temporary probe records were removed; no commit or publication occurred.
 
+## Clean app termination — 10 October 2026
+
+- Closing the last app window now quits. Both window close and Quit defer AppKit
+  termination until session cancellation, SSH/SFTP and RDP native-worker cleanup,
+  and all launched WireGuard helper exits complete. Already-closed/replaced tabs
+  and helpers already stopping are included. New connections, prompts and tunnel
+  leases are rejected during shutdown; saved tab restoration metadata is retained.
+- Thirteen workspace checks passed, including actual AppKit window-close and Quit
+  process exits with delayed transport doubles, one-time cleanup completion, late
+  prompt cancellation and a production SSH/SFTP worker whose tab was already removed.
+  The AppKit checks used synthetic sessions; simultaneous real SSH/RDP/WireGuard
+  app termination was not exercised.
+- Eighteen SSH, 75 SFTP, four TLS RDP, five NLA RDP and ten protected-probe synthetic
+  checks passed. SSH/RDP clients now wait for native-worker completion before exiting.
+  Sandboxed WireGuard shared-lease and app-shutdown checks passed, including actual
+  helper exits, a helper already stopping and rejection of new leases after shutdown.
+- Seventeen core and 13 maintenance checks passed. Maintenance used the test
+  environment's Python because the system Python lacks pathlib.Path.hardlink_to.
+  Release/final bundle/platform/signature/loader/sandboxed-helper checks, configured
+  Swift/Objective-C formatting, shell syntax, repository hygiene and whitespace passed.
+- No real servers, protected local input, user database, Keychain or clipboard were
+  accessed. Disposable test processes/directories/logs were removed. No commit or
+  publication occurred.
+
 ## Retained evidence
 
 Earlier isolated UI runs exercised the native workspace/editor, private-key/trust

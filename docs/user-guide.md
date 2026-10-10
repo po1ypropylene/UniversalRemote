@@ -48,6 +48,9 @@ Session tabs can be reordered by dragging. Switching tabs does not reconnect or
 terminate their sessions. The toolbar provides reconnect, disconnect, full screen,
 and connection details. Closing a session disconnects it. Restored tabs remain
 disconnected until you choose Reconnect; ad hoc connections are not restored.
+Closing the last app window quits Universal Remote. Closing the window or choosing
+Quit disconnects SSH/SFTP and RDP sessions and stops all embedded WireGuard tunnels
+before the app exits.
 
 ### WireGuard for private RDP servers
 

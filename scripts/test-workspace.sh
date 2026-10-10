@@ -6,9 +6,12 @@ xcrun swiftc -parse-as-library -target arm64-apple-macos27.0 \
   UniversalRemote/Domain/*.swift UniversalRemote/Persistence/*.swift \
   UniversalRemote/Shared/Security/*.swift UniversalRemote/Shared/Prompting/*.swift \
   UniversalRemote/Shared/Testing/*.swift UniversalRemote/Features/Connections/EditorRequest.swift \
-  UniversalRemote/Features/Workspace/Workspace.swift Tests/Integration/Workspace/WorkspaceChecks.swift \
+  UniversalRemote/Features/Workspace/Workspace.swift UniversalRemote/App/AppDelegate.swift \
+  Tests/Integration/Workspace/WorkspaceChecks.swift \
   -o "$fixture_root/client"
 "$fixture_root/client"
+"$fixture_root/client" close-window
+"$fixture_root/client" quit
 
 # Exercise the actual main-actor session and native SSH adapter after the fast doubles.
 products="$PWD/.build/Xcode/Build/Products/Release"

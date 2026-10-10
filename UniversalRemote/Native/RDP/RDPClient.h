@@ -27,5 +27,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setClipboardText:(NSString *)text;
 - (void)sendControlAltDelete;
 - (void)disconnect;
+// Asynchronous worker drain for app termination; never blocks the main thread.
++ (void)whenAllDisconnected:(void (^)(void))completion;
 @end
 NS_ASSUME_NONNULL_END

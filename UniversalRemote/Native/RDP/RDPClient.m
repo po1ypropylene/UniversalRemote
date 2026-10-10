@@ -64,6 +64,14 @@ typedef struct {
     audioPlayback:(BOOL)audioPlayback;
 - (void)drainEvents:(URContext *)context;
 @end
+static dispatch_group_t workers(void) {
+    static dispatch_group_t group;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      group = dispatch_group_create();
+    });
+    return group;
+}
 static URRDPClient *owner(rdpContext *context) { return (__bridge URRDPClient *)((URContext *)context)->owner; }
 // Override only TCP dialing; FreeRDP retains the real hostname for TLS/NLA.
 // Any server redirection to another endpoint fails closed.
@@ -407,6 +415,9 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
 @implementation URRDPClient {
     NSString *_clipboardText;
 }
++ (void)whenAllDisconnected:(void (^)(void))completion {
+    dispatch_group_notify(workers(), dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), completion);
+}
 - (instancetype)init {
     if ((self = [super init])) {
         _lock = [NSLock new];
@@ -429,6 +440,7 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
               scale:(NSInteger)scale
           clipboard:(BOOL)clipboard
       audioPlayback:(BOOL)audioPlayback {
+    dispatch_group_enter(workers());
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
       @autoreleasepool {
           [self runHost:host
@@ -442,6 +454,7 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
                   clipboard:clipboard
               audioPlayback:audioPlayback];
       }
+      dispatch_group_leave(workers());
     });
 }
 - (void)runHost:(NSString *)host

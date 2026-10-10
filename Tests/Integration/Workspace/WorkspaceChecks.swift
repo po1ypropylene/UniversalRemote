@@ -26,8 +26,37 @@ struct TestServerImportRequest {
     let document: TestServerDocument
 }
 
+// Delayed completions expose an early termination reply and main-thread blocking.
+enum CleanupDouble {
+    static var completed = 0
+    static func drain(after delay: Double, completion: @escaping () -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            completed += 1
+            completion()
+        }
+    }
+}
+enum URSSHClient {
+    static func whenAllDisconnected(_ completion: @escaping () -> Void) {
+        CleanupDouble.drain(after: 0.05, completion: completion)
+    }
+}
+enum URRDPClient {
+    static func whenAllDisconnected(_ completion: @escaping () -> Void) {
+        CleanupDouble.drain(after: 0.1, completion: completion)
+    }
+}
+enum WireGuardTransport {
+    static func shutdownAll(completion: @escaping () -> Void) {
+        CleanupDouble.drain(after: 0.15, completion: completion)
+    }
+}
+
 @main struct WorkspaceChecks {
     @MainActor static func main() throws {
+        if let mode = CommandLine.arguments.dropFirst().first {
+            terminationCheck(mode)
+        }
         let suite = "com.peterpo.UniversalRemote.WorkspaceTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -126,5 +155,79 @@ struct TestServerImportRequest {
         precondition(workspace.sessions.last!.state == .connected)
         precondition(workspace.sessions.last!.profile.authentication == .interactive)
         print("PASS interactive retry uses server prompts without saved credential lookup")
+
+        let remembered = defaults.stringArray(forKey: "workspaceConnections")
+        var replies = 0
+        workspace.shutdown { replies += 1 }
+        workspace.shutdown { replies += 1 }
+        workspace.connect(draft("Too late"))
+        workspace.reconnect(retry)
+        let waiter = PromptWaiter()
+        workspace.enqueue(
+            SessionPrompt(sessionID: retry.id, kind: .interactive, title: "Late", details: "", waiter: waiter))
+        precondition(waiter.wait() == nil && workspace.prompts.isEmpty)
+        precondition(replies == 0 && workspace.sessions.allSatisfy { $0.state == .disconnected })
+        precondition(defaults.stringArray(forKey: "workspaceConnections") == remembered)
+        let deadline = Date().addingTimeInterval(5)
+        while replies < 2 && Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.02)) }
+        precondition(replies == 2 && CleanupDouble.completed == 3)
+        let delegate = AppDelegate()
+        precondition(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateNow)
+        precondition(delegate.applicationShouldTerminateAfterLastWindowClosed(NSApplication.shared))
+        print("PASS shutdown drains all transports once, cancels late prompts and retains restoration")
+    }
+
+    @MainActor static func terminationCheck(_ mode: String) -> Never {
+        precondition(mode == "close-window" || mode == "quit")
+        let app = NSApplication.shared
+        let suite = "com.peterpo.UniversalRemote.TerminationTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        let workspace = Workspace(loadCredential: { _ in ConnectionCredential() }, defaults: defaults)
+        var draft = ConnectionDraft()
+        draft.host = "fixture.invalid"
+        draft.username = "fixture"
+        workspace.connect(draft)
+        draft.id = UUID()
+        draft.kind = .rdp
+        draft.port = 3389
+        workspace.connect(draft)
+        let delegate = AppDelegate()
+        delegate.workspace = workspace
+        app.delegate = delegate
+        let observer = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: app, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                precondition(CleanupDouble.completed == 3 && workspace.isShuttingDown)
+                precondition(workspace.sessions.allSatisfy { $0.state == .disconnected })
+                let testDefaults = UserDefaults(suiteName: suite)!
+                testDefaults.removePersistentDomain(forName: suite)
+                testDefaults.synchronize()
+                let preferenceFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
+                    "Library/Preferences/\(suite).plist")
+                try? FileManager.default.removeItem(at: preferenceFile)
+                print("PASS actual AppKit \(mode) exits after SSH/RDP/WireGuard cleanup")
+                fflush(stdout)
+            }
+        }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled, .closable],
+            backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.orderFront(nil)
+        let trigger = Timer(timeInterval: 0.02, repeats: false) { _ in
+            MainActor.assumeIsolated {
+                if mode == "close-window" { window.close() } else { app.terminate(nil) }
+            }
+        }
+        let watchdog = Timer(timeInterval: 5, repeats: false) { _ in
+            UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+            fputs("FAIL AppKit termination timed out\n", stderr)
+            exit(1)
+        }
+        RunLoop.main.add(trigger, forMode: .common)
+        RunLoop.main.add(watchdog, forMode: .common)
+        withExtendedLifetime((delegate, window, observer)) { app.run() }
+        exit(1)
     }
 }

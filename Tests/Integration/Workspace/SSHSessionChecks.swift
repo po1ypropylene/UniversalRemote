@@ -60,5 +60,18 @@ import Foundation
         precondition(retry.sshMode == .files && !retry.credentialsRejected && lookups == 1)
         precondition(workspace.prompts.isEmpty && rejected.state == .disconnected)
         print("PASS production SSH credential rejection → fresh prompt → file-only SFTP listing")
+
+        // Closing removes the session from the workspace before its worker exits.
+        workspace.close(retry)
+        let pending = RemoteSession(profile: draft, workspace: workspace, persistent: false)
+        workspace.sessions.append(pending)
+        pending.askForCredentials()
+        precondition(!workspace.prompts.isEmpty)
+        await withCheckedContinuation { continuation in
+            workspace.shutdown { continuation.resume() }
+        }
+        precondition(workspace.isShuttingDown && workspace.prompts.isEmpty)
+        precondition(retry.state == .disconnected && workspace.sessions.allSatisfy { $0.state == .disconnected })
+        print("PASS production shutdown drains a closed SSH/SFTP worker and cancels credential prompts")
     }
 }

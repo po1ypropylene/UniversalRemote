@@ -60,5 +60,28 @@ import Foundation
             throw WireGuardError.transport
         } catch is CancellationError {}
         print("PASS Swift tunnel lifecycle: shared leases, independent cleanup, changed-profile refusal, cancellation")
+
+        let sharedID = UUID()
+        let transports = [WireGuardTransport(), WireGuardTransport(), WireGuardTransport()]
+        let ports = try transports.enumerated().map { index, transport in
+            try transport.start(
+                id: index < 2 ? sharedID : UUID(), configuration: configuration, credential: credential,
+                host: "10.111.0.1", port: 3389, onExit: {}
+            ).port
+        }
+        transports[2].stop()
+        let exited = DispatchSemaphore(value: 0)
+        WireGuardTransport.shutdownAll { exited.signal() }
+        guard exited.wait(timeout: .now() + 5) == .success, ports.allSatisfy({ !reachable($0) }) else {
+            throw WireGuardError.transport
+        }
+        do {
+            _ = try WireGuardTransport().start(
+                id: UUID(), configuration: configuration, credential: credential, host: "10.111.0.1", port: 3389,
+                onExit: {})
+            throw WireGuardError.transport
+        } catch is CancellationError {}
+        for transport in transports { transport.stop() }
+        print("PASS app shutdown waits for shared and already-stopping helpers and rejects new leases")
     }
 }

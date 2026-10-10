@@ -56,6 +56,15 @@ single-use PromptWaiter responses while the main actor presents sheets. Cancella
 resolves pending prompts, interrupts transport work, invalidates callbacks and stops
 clipboard timers. Never wait for workers/prompts on the main actor.
 
+Closing the last app window requests termination. Quit and window close use the same
+asynchronous shutdown: save tab restoration metadata, reject new connections/prompts,
+cancel existing prompts and disconnect all sessions, then reply to AppKit only after
+SSH/RDP workers finish freeing their native handles and every launched WireGuard
+helper exits. Protocol-wide worker/process groups also cover already-closed or
+replaced tabs and helpers whose final lease was released. WireGuard shutdown rejects
+new leases. Completion runs through the main run loop, including AppKit's nested
+termination loop; the main actor never blocks waiting for protocol cleanup.
+
 CredentialStore currently exposes synchronous Keychain operations used by UI callers.
 Development signing changes can trigger authorization stalls; worker-based credential
 I/O with explicit prompt/cancellation policy remains an open improvement. Injected

@@ -33,6 +33,11 @@ Interactive retry without loading saved secrets. They also exercise the producti
 Workspace/RemoteSession/native adapter from a rejected saved password through a
 fresh prompt to a file-only SFTP listing. Run `scripts/build.sh` first; this check
 reuses its SwiftTerm module/object while all test executables/preferences are disposable.
+Workspace checks also exercise actual AppKit last-window close and Quit with delayed
+transport doubles, verify termination waits for every completion, and use the real
+SSH/SFTP worker to check shutdown after its tab is removed. SSH/RDP integration
+clients await worker cleanup; WireGuard lifecycle checks await actual helper exits,
+including shared leases and an already-stopping helper, and reject leases after shutdown.
 SFTP checks include
 file-only connections after channel/PTY/shell refusal or immediate shell EOF,
 refusal of both services, keyboard-interactive password sign-in without a shell,

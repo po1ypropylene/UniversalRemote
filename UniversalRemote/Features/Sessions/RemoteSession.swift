@@ -46,6 +46,7 @@ import SwiftTerm
         }
     }
     func start(credential: ConnectionCredential) {
+        guard workspace?.isShuttingDown != true else { return }
         guard profile.kind == .rdp, let tunnelID = profile.wireGuardID else {
             startProtocol(credential: credential)
             return

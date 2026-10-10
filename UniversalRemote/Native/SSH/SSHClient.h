@@ -38,5 +38,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)resizeColumns:(NSInteger)columns rows:(NSInteger)rows;
 - (void)cancelFiles;
 - (void)disconnect;
+// Asynchronous worker drain for app termination; never blocks the main thread.
++ (void)whenAllDisconnected:(void (^)(void))completion;
 @end
 NS_ASSUME_NONNULL_END

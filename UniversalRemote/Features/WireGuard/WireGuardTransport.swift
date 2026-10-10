@@ -9,6 +9,8 @@ final class WireGuardTransport: @unchecked Sendable {
     private var lease: (UUID, String)?
     private static let registryLock = NSLock()
     private static var helpers: [UUID: Helper] = [:]
+    private static var shuttingDown = false
+    private static let processes = DispatchGroup()
 
     private struct Request: Encodable {
         var command = "open"
@@ -112,6 +114,7 @@ final class WireGuardTransport: @unchecked Sendable {
         lock.unlock()
         Self.registryLock.lock()
         defer { Self.registryLock.unlock() }
+        guard !Self.shuttingDown else { throw CancellationError() }
         let helper: Helper
         if let active = Self.helpers[id] {
             guard active.configuration == configuration, active.privateKey == privateKey,
@@ -121,16 +124,21 @@ final class WireGuardTransport: @unchecked Sendable {
         } else {
             helper = try Helper(configuration: configuration, credential: credential)
             helper.process.terminationHandler = { [weak helper] _ in
+                Self.processes.leave()
                 guard let helper else { return }
                 DispatchQueue.global().async {
                     Self.registryLock.lock()
                     let callbacks = helper.callbacks.values.map { $0 }
                     if Self.helpers[id] === helper { Self.helpers.removeValue(forKey: id) }
                     Self.registryLock.unlock()
-                    callbacks.forEach { $0() }
+                    for callback in callbacks { callback() }
                 }
             }
-            do { try helper.process.run() } catch { throw WireGuardError.helperLaunch }
+            Self.processes.enter()
+            do { try helper.process.run() } catch {
+                Self.processes.leave()
+                throw WireGuardError.helperLaunch
+            }
             Self.helpers[id] = helper
         }
         helper.callbacks[token] = onExit
@@ -164,7 +172,7 @@ final class WireGuardTransport: @unchecked Sendable {
                 helper.callbacks.removeAll()
                 helper.shutdown()
                 Self.helpers.removeValue(forKey: id)
-                DispatchQueue.global().async { callbacks.forEach { $0() } }
+                DispatchQueue.global().async { for callback in callbacks { callback() } }
             }
             if error is CancellationError { throw error }
             throw (error as? WireGuardError) ?? WireGuardError.initialization
@@ -191,6 +199,22 @@ final class WireGuardTransport: @unchecked Sendable {
                     port: 0, token: token)
                 do { try helper.send(request) } catch { helper.shutdown() }
             }
+        }
+    }
+    /// Permanently rejects new leases and waits for every launched helper to exit,
+    /// including helpers already removed from the registry by their last lease.
+    static func shutdownAll(completion: @escaping @Sendable () -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            registryLock.lock()
+            shuttingDown = true
+            let active = Array(helpers.values)
+            helpers.removeAll()
+            for helper in active {
+                helper.callbacks.removeAll()
+                helper.shutdown()
+            }
+            registryLock.unlock()
+            processes.notify(queue: .global(qos: .userInitiated), execute: completion)
         }
     }
     deinit { stop() }

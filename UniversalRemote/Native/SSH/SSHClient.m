@@ -34,6 +34,15 @@
 - (NSString *)authenticationResponse:(NSString *)prompt echo:(BOOL)echo;
 @end
 
+static dispatch_group_t workers(void) {
+    static dispatch_group_t group;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      group = dispatch_group_create();
+    });
+    return group;
+}
+
 static double monotonicTime(void) {
     struct timespec t;
     clock_gettime(CLOCK_MONOTONIC, &t);
@@ -56,6 +65,9 @@ static void keyboardPrompt(const char *name, int nameLen, const char *instructio
 }
 
 @implementation URSSHClient
++ (void)whenAllDisconnected:(void (^)(void))completion {
+    dispatch_group_notify(workers(), dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), completion);
+}
 - (instancetype)init {
     if ((self = [super init])) {
         _lock = [NSLock new];
@@ -223,6 +235,7 @@ static void keyboardPrompt(const char *name, int nameLen, const char *instructio
      authentication:(NSString *)authentication {
     // One worker owns all libssh2 handles. Public methods only enqueue input or
     // interrupt the socket.
+    dispatch_group_enter(workers());
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
       @autoreleasepool {
           [self runHost:host
@@ -232,6 +245,7 @@ static void keyboardPrompt(const char *name, int nameLen, const char *instructio
                   privateKey:key
               authentication:authentication];
       }
+      dispatch_group_leave(workers());
     });
 }
 - (void)runHost:(NSString *)host
