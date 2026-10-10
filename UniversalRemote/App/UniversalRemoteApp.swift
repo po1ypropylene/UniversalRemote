@@ -55,8 +55,11 @@ import SwiftUI
                     Button("Import Test Servers…") { workspace.chooseTestServerFile() }
                 }
                 CommandGroup(replacing: .textEditing) {
-                    Button("Find in Terminal…") { workspace.selectedSession?.terminal?.find() }.keyboardShortcut("f")
-                        .disabled(workspace.selectedSession?.terminal == nil)
+                    if let session = workspace.selectedSession {
+                        FindInTerminalCommandButton(session: session)
+                    } else {
+                        Button("Find in Terminal…") {}.keyboardShortcut("f").disabled(true)
+                    }
                 }
                 CommandMenu("Session") {
                     Button("Reconnect") { if let session = workspace.selectedSession { workspace.reconnect(session) } }
@@ -74,5 +77,15 @@ import SwiftUI
                 }
             }
         Settings { AppSettings() }
+    }
+}
+
+private struct FindInTerminalCommandButton: View {
+    @ObservedObject var session: RemoteSession
+    var body: some View {
+        Button("Find in Terminal…") {
+            guard session.terminalAvailable else { return }
+            session.terminal?.find()
+        }.keyboardShortcut("f").disabled(session.terminal == nil || !session.terminalAvailable)
     }
 }

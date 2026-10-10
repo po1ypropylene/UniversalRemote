@@ -16,12 +16,12 @@ struct AppSettings: View {
             Text(
                 "Restored tabs stay disconnected until you reconnect. Credentials use Keychain when available, with an owner-only local file fallback for development builds. Local files are not encrypted."
             ).font(
-                .caption
+                .callout
             ).foregroundStyle(.secondary)
             LabeledContent("Protocols", value: "SSH · RDP")
             LabeledContent(
                 "Version",
                 value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown")
-        }.formStyle(.grouped).frame(width: 440, height: 240).padding(16)
+        }.formStyle(.grouped).controlSize(.large).frame(width: 480, height: 280).padding(16)
     }
 }

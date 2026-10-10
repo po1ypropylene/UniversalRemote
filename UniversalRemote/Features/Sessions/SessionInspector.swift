@@ -11,7 +11,7 @@ struct SessionInspector: View {
                 LabeledContent("Port", value: String(session.profile.port))
                 LabeledContent("User", value: session.profile.username)
                 if !session.profile.domain.isEmpty { LabeledContent("Domain", value: session.profile.domain) }
-                if !session.remoteTitle.isEmpty { Text(session.remoteTitle).font(.caption).foregroundStyle(.secondary) }
+                if !session.remoteTitle.isEmpty { Text(session.remoteTitle).font(.callout).foregroundStyle(.secondary) }
                 if !session.profile.notes.isEmpty {
                     Divider()
                     Text(session.profile.notes).foregroundStyle(.secondary)
@@ -20,11 +20,11 @@ struct SessionInspector: View {
                 Text("Activity").font(.headline)
                 ForEach(session.logs) { log in
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(log.time, style: .time).font(.caption2).foregroundStyle(.tertiary)
-                        Text(log.message).font(.caption).textSelection(.enabled)
+                        Text(log.time, style: .time).font(.callout).foregroundStyle(.tertiary)
+                        Text(log.message).font(.callout).textSelection(.enabled)
                     }
                 }
-                Text("Passwords and terminal contents are not recorded here.").font(.caption2).foregroundStyle(
+                Text("Passwords and terminal contents are not recorded here.").font(.callout).foregroundStyle(
                     .secondary)
             }.padding(20)
         }.background(.background)

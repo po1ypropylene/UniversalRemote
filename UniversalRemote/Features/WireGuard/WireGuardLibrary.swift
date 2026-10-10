@@ -42,7 +42,7 @@ struct WireGuardLibrary: View {
                         Text(
                             "One peer per profile. Import reads the selected file; it does not run scripts or change macOS networking. ListenPort is managed automatically."
                         )
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.callout).foregroundStyle(.secondary)
                     }
                     Section("Interface") {
                         TextField("Addresses", text: $configuration.addresses, prompt: Text("10.0.0.2/32"))
@@ -60,24 +60,24 @@ struct WireGuardLibrary: View {
                         Text(
                             "DNS servers inside Allowed IPs use WireGuard; other configured DNS servers use this Mac’s normal network. Leave DNS empty when the RDP server uses an IP address. Active RDP sessions share this profile’s tunnel. Disconnect them before applying changes to tunnel settings or keys."
                         )
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.callout).foregroundStyle(.secondary)
                     }
                     Section {
                         Text(
                             "Keys use Keychain when available, otherwise owner-only files on this Mac. Local files are not encrypted. Keys are excluded from the connection library."
                         )
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.callout).foregroundStyle(.secondary)
                     }
                 }.formStyle(.grouped)
             }
             Divider()
             HStack {
                 Text(error ?? validation ?? "Select this profile in an RDP connection’s Add/Edit screen.")
-                    .font(.caption).foregroundStyle(error == nil ? Color.secondary : .red)
+                    .font(.callout).foregroundStyle(error == nil ? Color.secondary : .red)
                 Spacer()
-                Button("Save") { save() }.buttonStyle(.glassProminent).disabled(validation != nil)
+                PrimaryActionButton(title: "Save") { save() }.disabled(validation != nil)
             }.padding(18)
-        }.frame(width: 860, height: 690)
+        }.buttonStyle(ComfortableButtonStyle()).controlSize(.large).frame(width: 920, height: 720)
             .onChange(of: selectedID) { _, id in if let id { load(id) } }
             .confirmationDialog("Delete this WireGuard connection?", isPresented: $deleting) {
                 Button("Delete", role: .destructive) { delete() }

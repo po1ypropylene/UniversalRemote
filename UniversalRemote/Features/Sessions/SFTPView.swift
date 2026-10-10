@@ -31,11 +31,13 @@ struct SFTPView: View {
                 if controller.busy {
                     Button("Cancel") { controller.cancel() }
                         .disabled(controller.cancelling)
-                        .help("Stops file work and keeps the SSH terminal connected.")
+                        .help("Stops file work and keeps the SSH connection open.")
                 }
                 Text("Ask before overwriting files").foregroundStyle(.secondary)
-            }.font(.caption).padding(10).background(.bar)
+            }.font(.callout).padding(10).background(.bar)
         }
+        .buttonStyle(ComfortableButtonStyle())
+        .controlSize(.large)
         .onAppear {
             path = controller.remotePath
             controller.prepareLocalAccess()
@@ -118,18 +120,19 @@ struct SFTPView: View {
 
     private var localPane: some View {
         VStack(spacing: 0) {
-            HStack {
+            Button {
+                controller.chooseLocalFolder()
+            } label: {
                 Label("Local Mac", systemImage: "laptopcomputer").font(.headline)
-                Spacer()
-                Button(controller.needsLocalAccess ? "Allow Home access…" : "Choose folder…") {
-                    controller.chooseLocalFolder()
-                }.disabled(controller.busy)
-            }.padding(10)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+            }.buttonStyle(.plain).disabled(controller.busy)
+                .help("Choose a local folder")
+                .accessibilityHint("Opens the local folder picker")
+                .padding(10)
             HStack {
-                Button {
+                IconActionButton(title: "Parent local folder", symbol: "arrow.up") {
                     controller.localParent()
-                } label: {
-                    Image(systemName: "arrow.up")
                 }
                 .disabled(controller.busy || !controller.canGoLocalUp).help("Parent local folder")
                 Text(controller.localURL?.path ?? "Choose a folder to grant access").lineLimit(1).truncationMode(
@@ -137,13 +140,11 @@ struct SFTPView: View {
                 )
                 .textSelection(.enabled)
                 Spacer(minLength: 0)
-                Button {
+                IconActionButton(title: "Refresh local files", symbol: "arrow.clockwise") {
                     controller.refreshLocal()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
                 }
                 .disabled(controller.busy || controller.localURL == nil).help("Refresh local files")
-            }.font(.caption).padding(.horizontal, 10).padding(.bottom, 8)
+            }.font(.callout).padding(.horizontal, 10).padding(.bottom, 8)
             Divider()
             fileList(controller.localFiles, selection: $localSelection, local: true)
                 .overlay {
@@ -163,7 +164,7 @@ struct SFTPView: View {
                 Text(
                     localSelection.isEmpty ? "\(controller.localFiles.count) items" : "\(localSelection.count) selected"
                 ).foregroundStyle(.secondary)
-            }.font(.caption).padding(10)
+            }.font(.callout).padding(10)
         }
     }
     private var remotePane: some View {
@@ -171,30 +172,26 @@ struct SFTPView: View {
             HStack {
                 Label("Server", systemImage: "externaldrive.connected.to.line.below").font(.headline)
                 Spacer()
-                Text("SFTP over SSH").font(.caption).foregroundStyle(.secondary)
-            }.padding(10)
+                Text("SFTP over SSH").font(.callout).foregroundStyle(.secondary)
+            }.frame(minHeight: 44).padding(10)
             HStack {
-                Button {
+                IconActionButton(title: "Parent server folder", symbol: "arrow.up") {
                     controller.remoteParent()
-                } label: {
-                    Image(systemName: "arrow.up")
                 }
                 .disabled(!connected || controller.busy || controller.remotePath == "/").help("Parent server folder")
-                TextField("Server folder", text: $path).onSubmit { controller.refreshRemote(path: path) }
-                    .disabled(!connected || controller.busy)
-                Button {
+                TextField("Server folder", text: $path).frame(minHeight: 44).onSubmit {
                     controller.refreshRemote(path: path)
-                } label: {
-                    Image(systemName: "arrow.right")
+                }
+                .disabled(!connected || controller.busy)
+                IconActionButton(title: "Open server folder", symbol: "arrow.right") {
+                    controller.refreshRemote(path: path)
                 }
                 .disabled(!connected || controller.busy).help("Open server folder")
-                Button {
+                IconActionButton(title: "Refresh server files", symbol: "arrow.clockwise") {
                     controller.refreshRemote()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
                 }
                 .disabled(!connected || controller.busy).help("Refresh server files")
-            }.font(.caption).padding(.horizontal, 10).padding(.bottom, 8)
+            }.font(.callout).padding(.horizontal, 10).padding(.bottom, 8)
             Divider()
             fileList(controller.remoteFiles, selection: $remoteSelection, local: false)
             Divider()
@@ -206,7 +203,7 @@ struct SFTPView: View {
                 Spacer()
                 Text(remoteSelection.isEmpty ? "Double-click to open" : "\(remoteSelection.count) selected")
                     .foregroundStyle(.secondary)
-            }.font(.caption).padding(10)
+            }.font(.callout).padding(10)
         }
     }
     private func selected(_ files: [TransferFile], ids: Set<String>) -> [TransferFile] {
@@ -228,8 +225,8 @@ struct SFTPView: View {
                     Label(file.name, systemImage: file.directory ? "folder.fill" : file.regular ? "doc" : "link")
                         .lineLimit(1)
                     Spacer()
-                    Text(file.sizeLabel).font(.caption).foregroundStyle(.secondary)
-                }.tag(file.id).contentShape(Rectangle())
+                    Text(file.sizeLabel).font(.callout).foregroundStyle(.secondary)
+                }.frame(minHeight: 44).tag(file.id).contentShape(Rectangle())
                     .itemProvider {
                         guard !controller.busy, file.transferable else { return nil }
                         let items =
@@ -324,7 +321,7 @@ private struct FileNameSheet: View {
                 Button(request.file == nil ? "Create" : "Rename") { save() }
                     .keyboardShortcut(.defaultAction).disabled(!valid)
             }
-        }.padding(24).frame(width: 380)
+        }.buttonStyle(ComfortableButtonStyle()).controlSize(.large).padding(24).frame(width: 420)
     }
     private func save() {
         guard valid else { return }

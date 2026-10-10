@@ -22,12 +22,16 @@
     int _socket;
     NSInteger _columns, _rows;
     BOOL _resizePending;
+    BOOL _terminalUnavailable;
+    NSString *_interactivePassword;
+    BOOL _passwordResponseUsed;
     NSMutableArray<NSDictionary *> *_fileRequests;
     NSString *_activeFileRequest;
     LIBSSH2_SESSION *_workerSession;
     LIBSSH2_CHANNEL *_workerChannel;
     LIBSSH2_SFTP *_sftp;
 }
+- (NSString *)authenticationResponse:(NSString *)prompt echo:(BOOL)echo;
 @end
 
 static double monotonicTime(void) {
@@ -44,7 +48,7 @@ static void keyboardPrompt(const char *name, int nameLen, const char *instructio
                                                     length:prompts[i].length
                                                   encoding:NSUTF8StringEncoding]
                                ?: @"Authentication response";
-        NSString *answer = client.onPrompt ? client.onPrompt(prompt, prompts[i].echo != 0) : nil;
+        NSString *answer = [client authenticationResponse:prompt echo:prompts[i].echo != 0];
         const char *utf8 = (answer ?: @"").UTF8String;
         responses[i].text = strdup(utf8);
         responses[i].length = (unsigned int)strlen(utf8);
@@ -68,6 +72,89 @@ static void keyboardPrompt(const char *name, int nameLen, const char *instructio
 - (void)status:(NSString *)state message:(NSString *)message {
     if (self.onStatus)
         self.onStatus(state, message);
+}
+- (NSString *)authenticationResponse:(NSString *)prompt echo:(BOOL)echo {
+    if (atomic_load(&_stopped))
+        return nil;
+    NSString *normalized =
+        [[prompt lowercaseString] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if ([normalized hasSuffix:@":"])
+        normalized = [[normalized substringToIndex:normalized.length - 1]
+            stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    // Use the supplied password once, only for an explicitly masked password challenge.
+    // Codes, passphrases, visible prompts and unrecognized questions still go to the UI.
+    if (_interactivePassword && !_passwordResponseUsed && !echo &&
+        ([normalized isEqualToString:@"password"] || [normalized isEqualToString:@"enter password"])) {
+        _passwordResponseUsed = YES;
+        return _interactivePassword;
+    }
+    NSString *answer = self.onPrompt ? self.onPrompt(prompt, echo) : nil;
+    if (!answer)
+        [self disconnect];
+    return answer;
+}
+- (int)authenticate:(LIBSSH2_SESSION *)session
+               user:(const char *)user
+             length:(unsigned int)length
+           password:(NSString *)password
+         privateKey:(NSData *)key
+             method:(NSString *)method
+           deadline:(double)deadline {
+    int rc;
+    do {
+        if ([method isEqualToString:@"publickey"])
+            rc = libssh2_userauth_publickey_frommemory(session, user, length, NULL, 0, key.bytes, key.length,
+                                                       password.UTF8String);
+        else if ([method isEqualToString:@"keyboard-interactive"])
+            rc = libssh2_userauth_keyboard_interactive_ex(session, user, length, keyboardPrompt);
+        else
+            rc = libssh2_userauth_password_ex(session, user, length, password.UTF8String,
+                                              (unsigned int)strlen(password.UTF8String), NULL);
+    } while (rc == LIBSSH2_ERROR_EAGAIN && [self waitSocket:session deadline:deadline]);
+    return rc;
+}
+- (void)terminalAvailable:(BOOL)available {
+    [_lock lock];
+    _terminalUnavailable = !available;
+    if (!available) {
+        [_outgoing setLength:0];
+        _resizePending = NO;
+    }
+    [_lock unlock];
+    if (self.onTerminalAvailability)
+        self.onTerminalAvailability(available);
+}
+- (BOOL)closeTerminal:(LIBSSH2_CHANNEL **)channel session:(LIBSSH2_SESSION *)session {
+    if (!*channel)
+        return YES;
+    double deadline = monotonicTime() + 20;
+    int rc;
+    // Free also closes the channel. Finish its nonblocking state before opening SFTP.
+    do {
+        rc = libssh2_channel_free(*channel);
+    } while (rc == LIBSSH2_ERROR_EAGAIN && [self waitSocket:session deadline:deadline]);
+    if (rc)
+        return NO;
+    *channel = NULL;
+    _workerChannel = NULL;
+    return YES;
+}
+- (BOOL)openSFTPUntil:(double)deadline {
+    if (_sftp)
+        return YES;
+    do {
+        _sftp = libssh2_sftp_init(_workerSession);
+    } while (!_sftp && libssh2_session_last_errno(_workerSession) == LIBSSH2_ERROR_EAGAIN &&
+             [self waitForFileUntil:deadline]);
+    return _sftp != NULL;
+}
+- (BOOL)pumpIdleSFTP {
+    LIBSSH2_CHANNEL *channel = libssh2_sftp_get_channel(_sftp);
+    // Read only extended data: the subsystem owns all standard-stream bytes.
+    // This drains SSH control packets/keepalive replies without consuming SFTP replies.
+    char ignored[1024];
+    ssize_t count = libssh2_channel_read_ex(channel, SSH_EXTENDED_DATA_STDERR, ignored, sizeof(ignored));
+    return (count >= 0 || count == LIBSSH2_ERROR_EAGAIN) && !libssh2_channel_eof(channel);
 }
 - (BOOL)waitSocket:(LIBSSH2_SESSION *)session deadline:(double)deadline {
     if (atomic_load(&_stopped) || monotonicTime() >= deadline)
@@ -161,6 +248,9 @@ static void keyboardPrompt(const char *name, int nameLen, const char *instructio
     LIBSSH2_CHANNEL *channel = NULL;
     NSString *failure = nil;
     NSString *fingerprint = nil;
+    NSString *method = nil;
+    NSString *advertisedMethods = nil;
+    NSSet<NSString *> *methods = nil;
     double deadline = monotonicTime() + 30;
     int rc = 0;
     [self status:@"connecting" message:@"Connecting to server…"];
@@ -201,20 +291,68 @@ static void keyboardPrompt(const char *name, int nameLen, const char *instructio
     deadline = monotonicTime() + 120;
     const char *user = username.UTF8String;
     unsigned int userLen = (unsigned int)strlen(user);
+    const char *advertised;
     do {
-        if ([authentication isEqualToString:@"privateKey"])
-            rc = libssh2_userauth_publickey_frommemory(session, user, userLen, NULL, 0, key.bytes, key.length,
-                                                       password.UTF8String);
-        else if ([authentication isEqualToString:@"interactive"])
-            rc = libssh2_userauth_keyboard_interactive_ex(session, user, userLen, keyboardPrompt);
-        else
-            rc = libssh2_userauth_password_ex(session, user, userLen, password.UTF8String,
-                                              (unsigned int)strlen(password.UTF8String), NULL);
-    } while (rc == LIBSSH2_ERROR_EAGAIN && [self waitSocket:session deadline:deadline]);
+        advertised = libssh2_userauth_list(session, user, userLen);
+    } while (!advertised && libssh2_session_last_errno(session) == LIBSSH2_ERROR_EAGAIN &&
+             [self waitSocket:session deadline:deadline]);
+    // A NULL list also represents successful "none" authentication; check it explicitly.
+    if (!libssh2_userauth_authenticated(session)) {
+        if (!advertised) {
+            failure = @"Could not determine the server’s SSH sign-in methods.";
+            goto cleanup;
+        }
+        advertisedMethods = [NSString stringWithUTF8String:advertised];
+        if (!advertisedMethods) {
+            failure = @"The server returned invalid SSH sign-in methods.";
+            goto cleanup;
+        }
+        methods = [NSSet setWithArray:[advertisedMethods componentsSeparatedByString:@","]];
+        method = [authentication isEqualToString:@"privateKey"]    ? @"publickey"
+                 : [authentication isEqualToString:@"interactive"] ? @"keyboard-interactive"
+                                                                   : @"password";
+        if ([authentication isEqualToString:@"password"] && ![methods containsObject:method] &&
+            [methods containsObject:@"keyboard-interactive"])
+            method = @"keyboard-interactive";
+        if (![methods containsObject:method]) {
+            failure = @"The server does not support the selected SSH authentication option. Edit the connection "
+                      @"and select a method supported by your server.";
+            goto cleanup;
+        }
+        if ([authentication isEqualToString:@"password"])
+            _interactivePassword = password;
+        _passwordResponseUsed = NO;
+        rc = [self authenticate:session
+                           user:user
+                         length:userLen
+                       password:password
+                     privateKey:key
+                         method:method
+                       deadline:deadline];
+        if (rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED && [method isEqualToString:@"password"] &&
+            [methods containsObject:@"keyboard-interactive"] && !atomic_load(&_stopped) && monotonicTime() < deadline) {
+            rc = [self authenticate:session
+                               user:user
+                             length:userLen
+                           password:password
+                         privateKey:key
+                             method:@"keyboard-interactive"
+                           deadline:deadline];
+        }
+        _interactivePassword = nil;
+    }
+    if (atomic_load(&_stopped))
+        goto cleanup;
     if (rc) {
-        failure = [NSString stringWithFormat:@"SSH authentication failed (%d). Check your credentials or choose "
-                                             @"keyboard-interactive authentication if the server requires it.",
-                                             rc];
+        if (rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED || rc == LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED) {
+            if (self.onAuthenticationRejected)
+                self.onAuthenticationRejected();
+            failure = @"The SSH server rejected the username or credentials. Retry sign-in to enter fresh "
+                      @"credentials, or edit the connection to check the username and authentication option.";
+        } else if (rc == LIBSSH2_ERROR_PASSWORD_EXPIRED)
+            failure = @"The SSH password has expired. Change it with your server administrator before reconnecting.";
+        else
+            failure = [NSString stringWithFormat:@"SSH sign-in failed (%d) or timed out. Try connecting again.", rc];
         goto cleanup;
     }
     deadline = monotonicTime() + 20;
@@ -223,33 +361,57 @@ static void keyboardPrompt(const char *name, int nameLen, const char *instructio
     } while (!channel && libssh2_session_last_errno(session) == LIBSSH2_ERROR_EAGAIN &&
              [self waitSocket:session deadline:deadline]);
     if (!channel) {
-        failure = @"Could not open an SSH shell channel.";
-        goto cleanup;
-    }
-    [_lock lock];
-    int cols = (int)_columns, rows = (int)_rows;
-    [_lock unlock];
-    do {
-        rc = libssh2_channel_request_pty_ex(channel, "xterm-256color", 14, NULL, 0, cols, rows, 0, 0);
-    } while (rc == LIBSSH2_ERROR_EAGAIN && [self waitSocket:session deadline:deadline]);
-    if (rc) {
-        failure = @"The server refused an interactive terminal.";
-        goto cleanup;
-    }
-    do {
-        rc = libssh2_channel_shell(channel);
-    } while (rc == LIBSSH2_ERROR_EAGAIN && [self waitSocket:session deadline:deadline]);
-    if (rc) {
-        failure = @"The server refused a shell.";
-        goto cleanup;
+        if (libssh2_session_last_errno(session) != LIBSSH2_ERROR_CHANNEL_FAILURE) {
+            failure = @"Could not open an SSH shell channel.";
+            goto cleanup;
+        }
+    } else {
+        [_lock lock];
+        int cols = (int)_columns, rows = (int)_rows;
+        [_lock unlock];
+        do {
+            rc = libssh2_channel_request_pty_ex(channel, "xterm-256color", 14, NULL, 0, cols, rows, 0, 0);
+        } while (rc == LIBSSH2_ERROR_EAGAIN && [self waitSocket:session deadline:deadline]);
+        if (rc && rc != LIBSSH2_ERROR_CHANNEL_REQUEST_DENIED) {
+            failure = @"Could not start an interactive terminal.";
+            goto cleanup;
+        }
+        if (!rc) {
+            do {
+                rc = libssh2_channel_shell(channel);
+            } while (rc == LIBSSH2_ERROR_EAGAIN && [self waitSocket:session deadline:deadline]);
+            if (rc && rc != LIBSSH2_ERROR_CHANNEL_REQUEST_DENIED) {
+                failure = @"Could not start an SSH shell.";
+                goto cleanup;
+            }
+        }
+        if (rc && ![self closeTerminal:&channel session:session]) {
+            failure = @"Could not close the unavailable SSH terminal.";
+            goto cleanup;
+        }
     }
     _workerSession = session;
     _workerChannel = channel;
+    if (!channel && ![self openSFTPUntil:monotonicTime() + 30]) {
+        failure = @"The server provides neither an interactive terminal nor SFTP file transfer.";
+        goto cleanup;
+    }
     libssh2_keepalive_config(session, 1, 30);
-    [self status:@"connected" message:@"SSH connected"];
-    while (!atomic_load(&_stopped) && !libssh2_channel_eof(channel)) {
+    [self terminalAvailable:channel != NULL];
+    [self status:@"connected" message:channel ? @"SSH connected" : @"SSH connected — file transfer only"];
+    while (!atomic_load(&_stopped)) {
         @autoreleasepool {
-            if (![self pumpTerminal:channel]) {
+            // Forced SFTP accounts may accept the shell request and immediately close it.
+            // A finished shell also need not terminate an independently usable subsystem.
+            if (channel && libssh2_channel_eof(channel)) {
+                if (![self closeTerminal:&channel session:session] || ![self openSFTPUntil:monotonicTime() + 30]) {
+                    failure = @"The terminal ended and SFTP file transfer is unavailable.";
+                    break;
+                }
+                [self terminalAvailable:NO];
+                [self status:@"connected" message:@"SSH connected — file transfer only"];
+            }
+            if (channel ? ![self pumpTerminal:channel] : ![self pumpIdleSFTP]) {
                 failure = @"The SSH connection was interrupted.";
                 break;
             }
@@ -275,7 +437,11 @@ static void keyboardPrompt(const char *name, int nameLen, const char *instructio
                     self.onFiles(request[@"id"], reply, reply[@"error"]);
             }
             int next = 0;
-            libssh2_keepalive_send(session, &next);
+            int keepalive = libssh2_keepalive_send(session, &next);
+            if (keepalive && keepalive != LIBSSH2_ERROR_EAGAIN) {
+                failure = @"The SSH connection was interrupted.";
+                break;
+            }
             {
                 struct pollfd p = {_socket, POLLIN, 0};
                 poll(&p, 1, 20);
@@ -283,6 +449,7 @@ static void keyboardPrompt(const char *name, int nameLen, const char *instructio
         }
     }
 cleanup:
+    _interactivePassword = nil;
     _workerChannel = NULL;
     _workerSession = NULL;
     [_lock lock];
@@ -319,6 +486,8 @@ cleanup:
 }
 
 - (BOOL)pumpTerminal:(LIBSSH2_CHANNEL *)channel {
+    if (!channel || libssh2_channel_eof(channel))
+        return YES;
     NSString *failure = nil;
     [_lock lock];
     NSData *pending = [_outgoing copy];
@@ -481,15 +650,9 @@ cleanup:
         error = @"Invalid file path.";
         goto finish;
     }
-    if (!_sftp) {
-        do {
-            _sftp = libssh2_sftp_init(_workerSession);
-        } while (!_sftp && libssh2_session_last_errno(_workerSession) == LIBSSH2_ERROR_EAGAIN &&
-                 [self waitForFileUntil:deadline]);
-        if (!_sftp) {
-            error = @"The server could not open SFTP. Check that file transfer is enabled.";
-            goto finish;
-        }
+    if (![self openSFTPUntil:deadline]) {
+        error = @"The server could not open SFTP. Check that file transfer is enabled.";
+        goto finish;
     }
     if (![request[@"kind"] isEqualToString:@"upload"] && ![request[@"kind"] isEqualToString:@"download"] && !listing) {
         return [self performTreeOperation:request];
@@ -1015,7 +1178,7 @@ finish:
 
 - (void)sendData:(NSData *)data {
     [_lock lock];
-    if (_outgoing.length + data.length <= 1024 * 1024)
+    if (!_terminalUnavailable && !atomic_load(&_stopped) && _outgoing.length + data.length <= 1024 * 1024)
         [_outgoing appendData:data];
     [_lock unlock];
 }

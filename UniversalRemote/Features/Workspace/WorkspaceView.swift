@@ -7,6 +7,7 @@ struct WorkspaceView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \SavedConnection.name) private var connections: [SavedConnection]
     @Query(sort: \ConnectionFolder.order) private var folders: [ConnectionFolder]
+    @Query(sort: \SavedWireGuard.name) private var tunnels: [SavedWireGuard]
     @ObservedObject var workspace: Workspace
     @State private var search = ""
     @State private var selectedProfileID: UUID?
@@ -28,7 +29,7 @@ struct WorkspaceView: View {
                     Image("BrandMark").resizable().scaledToFit().frame(width: 38, height: 38).foregroundStyle(.tint)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Universal Remote").font(.headline)
-                        Text("Your servers, together").font(.caption).foregroundStyle(.secondary)
+                        Text("Your servers, together").font(.callout).foregroundStyle(.secondary)
                     }
                     Spacer()
                 }.padding(.horizontal, 18).padding(.vertical, 20)
@@ -36,13 +37,13 @@ struct WorkspaceView: View {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                     TextField("Search connections", text: $search).textFieldStyle(.plain)
                     if !search.isEmpty {
-                        Button {
+                        IconActionButton(title: "Clear search", symbol: "xmark.circle.fill") {
                             search = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                        }.buttonStyle(.plain)
+                        }
                     }
-                }.padding(9).background(.quaternary, in: RoundedRectangle(cornerRadius: 8)).padding(.horizontal, 14)
+                }.frame(minHeight: 44).padding(.horizontal, 10).background(
+                    .quaternary, in: RoundedRectangle(cornerRadius: 8)
+                ).padding(.horizontal, 14)
                     .padding(.bottom, 12)
                 List(selection: $selectedProfileID) {
                     if !filtered.filter(\.favorite).isEmpty {
@@ -52,7 +53,7 @@ struct WorkspaceView: View {
                         Section {
                             ForEach(filtered.filter { $0.folderID == folder.id }) { connectionRow($0) }
                             if filtered.filter({ $0.folderID == folder.id }).isEmpty {
-                                Text(search.isEmpty ? "No connections" : "No matches").font(.caption).foregroundStyle(
+                                Text(search.isEmpty ? "No connections" : "No matches").font(.callout).foregroundStyle(
                                     .tertiary)
                             }
                         } header: {
@@ -90,10 +91,10 @@ struct WorkspaceView: View {
                             showFolderEditor = true
                         }
                     } label: {
-                        Label("Add", systemImage: "plus")
-                    }.menuStyle(.borderlessButton).fixedSize()
+                        Label("Add", systemImage: "plus").frame(minWidth: 70, minHeight: 44).contentShape(Rectangle())
+                    }.menuStyle(.borderlessButton).controlSize(.large).frame(minWidth: 70, minHeight: 44)
                     Spacer()
-                    Text("\(connections.count) connections").font(.caption).foregroundStyle(.secondary)
+                    Text("\(connections.count) connections").font(.callout).foregroundStyle(.secondary)
                 }.padding(14)
             }.navigationSplitViewColumnWidth(min: 240, ideal: 270, max: 340)
         } detail: {
@@ -113,7 +114,7 @@ struct WorkspaceView: View {
                                             return true
                                         }
                                 }
-                            }.padding(.horizontal, 14).padding(.vertical, 10)
+                            }.padding(.horizontal, 14).padding(.vertical, 4)
                         }
                     }.scrollIndicators(.hidden)
                     Divider()
@@ -123,7 +124,7 @@ struct WorkspaceView: View {
                         SessionPane(session: session, workspace: workspace).id(session.id)
                         if workspace.showInspector {
                             Divider()
-                            SessionInspector(session: session).frame(width: 270)
+                            SessionInspector(session: session).frame(width: 300)
                         }
                     }
                 } else {
@@ -167,6 +168,8 @@ struct WorkspaceView: View {
                     }
                 }
         }
+        .buttonStyle(ComfortableButtonStyle())
+        .controlSize(.large)
         .frame(minWidth: 1000, minHeight: 660)
         .sheet(item: $workspace.testServerImport) { request in
             TestServerImportView(workspace: workspace, document: request.document)
@@ -228,19 +231,21 @@ struct WorkspaceView: View {
             Image(systemName: connection.kind.icon).foregroundStyle(connection.kind == .ssh ? Color.teal : Color.indigo)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 3) {
-                Text(connection.name).lineLimit(1)
-                Text(connection.host).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(connection.name).font(.title3).lineLimit(1)
+                Text(destinationDescription(connection)).font(.body).foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.middle).help(destinationDescription(connection))
             }
             Spacer()
-            Text(connection.protocolName).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary).padding(
+            Text(connection.protocolName).font(.callout.weight(.semibold)).foregroundStyle(.secondary).padding(
                 .horizontal, 5
             ).padding(.vertical, 3).background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
-        }.padding(.vertical, 4).tag(connection.id).contentShape(Rectangle())
+        }.frame(minHeight: 44).padding(.vertical, 4).tag(connection.id).contentShape(Rectangle())
+            .accessibilityAction(named: "Connect") { connect(connection) }
             .onTapGesture(count: 2) { connect(connection) }
             .contextMenu {
                 Button("Connect") { connect(connection) }
                 Button("Edit Connection…") {
-                    workspace.editor = EditorRequest(draft: ConnectionDraft(connection), mode: .edit)
+                    edit(connection)
                 }
                 Button(connection.favorite ? "Remove from Favorites" : "Add to Favorites") {
                     connection.favorite.toggle()
@@ -256,6 +261,11 @@ struct WorkspaceView: View {
                 Divider()
                 Button("Delete Connection…", role: .destructive) { deletingConnection = connection }
             }.draggable(connection.id.uuidString)
+    }
+    private func destinationDescription(_ connection: SavedConnection) -> String {
+        guard connection.kind == .rdp, let tunnelID = connection.wireGuardID else { return connection.host }
+        let name = tunnels.first(where: { $0.id == tunnelID })?.name ?? "Unavailable WireGuard connection"
+        return "\(connection.host) via \(name)"
     }
     private var overview: some View {
         ScrollView {
@@ -284,9 +294,9 @@ struct WorkspaceView: View {
                             Label(selected.name, systemImage: selected.kind.icon).font(.title3.weight(.semibold))
                             Spacer()
                             Button("Edit…") {
-                                workspace.editor = EditorRequest(draft: ConnectionDraft(selected), mode: .edit)
+                                edit(selected)
                             }
-                            Button("Connect") { connect(selected) }.buttonStyle(.borderedProminent)
+                            PrimaryActionButton(title: "Connect") { connect(selected) }
                         }
                         Text("\(selected.username)@\(selected.host):\(String(selected.port))").font(
                             .system(.body, design: .monospaced)
@@ -309,7 +319,7 @@ struct WorkspaceView: View {
                                 Image(systemName: connection.kind.icon).foregroundStyle(.tint)
                                 VStack(alignment: .leading) {
                                     Text(connection.name)
-                                    Text(connection.host).font(.caption).foregroundStyle(.secondary)
+                                    Text(destinationDescription(connection)).font(.body).foregroundStyle(.secondary)
                                 }
                                 Spacer()
                                 Button("Connect") { connect(connection) }
@@ -320,7 +330,7 @@ struct WorkspaceView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "lock.shield")
                     Text("Credentials stay on this Mac. Server identities are checked before sign-in.")
-                }.font(.caption).foregroundStyle(.secondary)
+                }.font(.callout).foregroundStyle(.secondary)
             }.padding(36).frame(maxWidth: 1000, alignment: .leading).frame(maxWidth: .infinity)
         }
     }
@@ -347,8 +357,10 @@ struct WorkspaceView: View {
         var draft = ConnectionDraft()
         draft.kind = kind
         draft.port = kind.defaultPort
-        draft.folderID = folders.first(where: { $0.id == selectedProfileID })?.id
         workspace.editor = EditorRequest(draft: draft, mode: .create)
+    }
+    private func edit(_ connection: SavedConnection) {
+        workspace.editor = EditorRequest(draft: ConnectionDraft(connection), mode: .edit)
     }
     private func connect(_ connection: SavedConnection) {
         connection.lastConnected = Date()

@@ -3,6 +3,10 @@ NS_ASSUME_NONNULL_BEGIN
 @interface URSSHClient : NSObject
 @property(nonatomic, copy) void (^onStatus)(NSString *state, NSString *message);
 @property(nonatomic, copy) void (^onData)(NSData *data);
+// Delivered on the SSH worker before connected, and when a shell ends but SFTP remains available.
+@property(nonatomic, copy, nullable) void (^onTerminalAvailability)(BOOL available);
+// Delivered on the SSH worker before failed when the server rejects credentials.
+@property(nonatomic, copy, nullable) void (^onAuthenticationRejected)(void);
 @property(nonatomic, copy) BOOL (^onTrust)(NSString *fingerprint, NSString *details);
 @property(nonatomic, copy) NSString *_Nullable (^onPrompt)(NSString *prompt, BOOL echo);
 - (void)connectHost:(NSString *)host

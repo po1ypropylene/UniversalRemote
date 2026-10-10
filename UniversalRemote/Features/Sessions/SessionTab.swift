@@ -3,37 +3,47 @@ import SwiftUI
 struct SessionTab: View {
     @ObservedObject var session: RemoteSession
     @ObservedObject var workspace: Workspace
+    private var selected: Bool { workspace.selectedSessionID == session.id }
+
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 0) {
             Button {
                 workspace.select(session.id)
             } label: {
-                HStack(spacing: 7) {
+                HStack(spacing: 6) {
                     Circle().fill(session.state.color).frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
                     Image(systemName: session.profile.kind.icon)
-                    Text(session.profile.name).fontWeight(
-                        workspace.selectedSessionID == session.id ? .semibold : .regular
-                    )
-                    .lineLimit(1).frame(maxWidth: 170)
+                        .font(.system(size: 12, weight: .medium))
+                        .accessibilityHidden(true)
+                    Text(session.profile.name).fontWeight(selected ? .semibold : .regular)
+                        .lineLimit(1).frame(maxWidth: 180)
                 }
-            }.buttonStyle(.plain)
-            Button {
-                workspace.close(session)
-            } label: {
-                Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).padding(5)
-            }.buttonStyle(.plain).help("Close session")
-        }.padding(.leading, 12).padding(.trailing, 5).padding(.vertical, 9)
-            .glassEffect(
-                workspace.selectedSessionID == session.id
-                    ? .regular.tint(.accentColor.opacity(0.25)).interactive() : .regular.interactive(),
-                in: Capsule()
-            )
-            .accessibilityElement(children: .contain)
-            .accessibilityAddTraits(workspace.selectedSessionID == session.id ? .isSelected : [])
-            .contextMenu {
-                Button("Reconnect") { workspace.reconnect(session) }
-                Button("Disconnect") { session.disconnect() }
-                Button("Close") { workspace.close(session) }
+                .font(.title3)
+                .padding(.leading, 12)
+                .padding(.trailing, 6)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(session.profile.name), \(session.profile.kind.rawValue)")
+            .accessibilityValue(session.state.title)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            .help("\(session.profile.name) · \(session.state.title)")
+
+            IconActionButton(title: "Close \(session.profile.name)", symbol: "xmark") {
+                workspace.close(session)
+            }
+        }
+        .glassEffect(
+            selected ? .regular.tint(.accentColor.opacity(0.25)).interactive() : .regular.interactive(),
+            in: Capsule()
+        )
+        .accessibilityElement(children: .contain)
+        .contextMenu {
+            Button("Reconnect") { workspace.reconnect(session) }
+            Button("Disconnect") { session.disconnect() }.disabled(!session.state.active)
+            Button("Close") { workspace.close(session) }
+        }
     }
 }

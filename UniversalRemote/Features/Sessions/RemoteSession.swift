@@ -13,7 +13,9 @@ import SwiftTerm
     @Published var remoteTitle = ""
     @Published var logs: [SessionLog] = []
     @Published var sshMode = SSHWorkspaceMode.terminal
-    let files = SFTPController()
+    @Published private(set) var terminalAvailable = true
+    @Published private(set) var credentialsRejected = false
+    let files: SFTPController
     let terminal: TerminalController?
     let desktop: RDPDesktopView?
     private var ssh: URSSHClient?
@@ -27,10 +29,11 @@ import SwiftTerm
     var isSelected = false
     weak var workspace: Workspace?
 
-    init(profile: ConnectionDraft, workspace: Workspace, persistent: Bool = true) {
+    init(profile: ConnectionDraft, workspace: Workspace, persistent: Bool = true, files: SFTPController? = nil) {
         self.profile = profile
         self.workspace = workspace
         self.persistent = persistent
+        self.files = files ?? SFTPController()
         if profile.kind == .ssh {
             terminal = TerminalController(profile: profile)
             desktop = nil
@@ -112,6 +115,8 @@ import SwiftTerm
         state = .connecting
         message = "Connecting…"
         if let terminal {
+            terminalAvailable = true
+            credentialsRejected = false
             let client = URSSHClient()
             ssh = client
             files.attach(client)
@@ -133,6 +138,19 @@ import SwiftTerm
             terminal.updateTitle = { [weak self] title in self?.remoteTitle = title }
             client.onStatus = { [weak self] status, message in
                 DispatchQueue.main.async { self?.update(status, message: message, attempt: attempt) }
+            }
+            client.onAuthenticationRejected = { [weak self] in
+                DispatchQueue.main.async {
+                    guard let self, self.generation == attempt else { return }
+                    self.credentialsRejected = true
+                }
+            }
+            client.onTerminalAvailability = { [weak self] available in
+                DispatchQueue.main.async {
+                    guard let self, self.generation == attempt else { return }
+                    self.terminalAvailable = available
+                    if !available { self.sshMode = .files }
+                }
             }
             client.onData = { [weak self] data in
                 DispatchQueue.main.sync {
@@ -299,7 +317,7 @@ import SwiftTerm
         logs.append(SessionLog(message: message))
     }
     private func cancelPrompts() {
-        pendingWaiters.forEach { $0.resolve(nil) }
+        for waiter in pendingWaiters { waiter.resolve(nil) }
         pendingWaiters.removeAll()
         workspace?.cancelPrompts(sessionID: id)
     }
@@ -326,7 +344,7 @@ import SwiftTerm
     }
     func controlAltDelete() { if state == .connected { rdp?.sendControlAltDelete() } }
     func focus() {
-        guard profile.kind != .ssh || sshMode != .files else { return }
+        guard profile.kind != .ssh || (terminalAvailable && sshMode != .files) else { return }
         if let view = terminal?.view ?? desktop { view.window?.makeFirstResponder(view) }
     }
 }

@@ -43,13 +43,7 @@ struct ConnectionEditor: View {
                     }.pickerStyle(.segmented)
                     TextField(
                         "Server address", text: $draft.host, prompt: Text("192.168.1.10 or server.example.com"))
-                    Text("Enter the computer’s IP address or host name, without a protocol prefix or port.")
-                        .font(.caption).foregroundStyle(.secondary)
                     TextField("Port", value: $draft.port, format: .number.grouping(.never))
-                    Text(
-                        "The standard \(draft.kind.rawValue) port is \(draft.kind.defaultPort.formatted(.number.grouping(.never))). Change it only if your server uses a different port."
-                    )
-                    .font(.caption).foregroundStyle(.secondary)
                     TextField("Username", text: $draft.username)
                     if draft.kind == .rdp {
                         TextField("Domain", text: $draft.domain, prompt: Text("Optional"))
@@ -65,7 +59,7 @@ struct ConnectionEditor: View {
                             Text(
                                 "Only this RDP session uses WireGuard. The server address must be reachable inside the tunnel."
                             )
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.callout).foregroundStyle(.secondary)
                         }
                     }
                     if draft.kind == .ssh {
@@ -82,20 +76,20 @@ struct ConnectionEditor: View {
             Divider()
             HStack {
                 if let error {
-                    Text(error).font(.caption).foregroundStyle(.red).lineLimit(3)
+                    Text(error).font(.callout).foregroundStyle(.red).lineLimit(3)
                 } else if let message = draft.validationMessage {
-                    Text(message).font(.caption).foregroundStyle(.secondary)
+                    Text(message).font(.callout).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 if request.mode != .quick {
                     Button("Save") { commit(connect: false) }.disabled(draft.validationMessage != nil)
                 }
-                Button(request.mode == .quick ? "Connect" : "Save & Connect") { commit(connect: true) }.buttonStyle(
-                    .glassProminent
-                ).keyboardShortcut(.defaultAction).disabled(draft.validationMessage != nil)
+                PrimaryActionButton(title: request.mode == .quick ? "Connect" : "Save & Connect") {
+                    commit(connect: true)
+                }.keyboardShortcut(.defaultAction).disabled(draft.validationMessage != nil)
             }.padding(18)
-        }.frame(width: 760)
+        }.buttonStyle(ComfortableButtonStyle()).controlSize(.large).frame(width: 760)
             .sheet(isPresented: $showWireGuard) { WireGuardLibrary() }
             .onAppear {
                 do { if let stored = try CredentialStore.load(draft.id) { credential = stored } } catch {
@@ -122,7 +116,7 @@ struct ConnectionEditor: View {
             SecureField("Key passphrase", text: $credential.password)
             Text(
                 "The imported key is saved on this Mac with your credentials. The original file stays unchanged."
-            ).font(.caption).foregroundStyle(.secondary)
+            ).font(.callout).foregroundStyle(.secondary)
         }
         if draft.kind == .ssh && draft.authentication == .interactive {
             Text("The server’s authentication questions will appear when you connect.").foregroundStyle(
@@ -132,10 +126,10 @@ struct ConnectionEditor: View {
             Toggle("Save credentials on this Mac", isOn: $remember)
             Text(
                 "Uses Keychain when available, otherwise owner-only files in your Library/Application Support folder. Local files are not encrypted. Turn off to enter credentials each time."
-            ).font(.caption)
+            ).font(.callout)
                 .foregroundStyle(.secondary)
         } else {
-            Text("Credentials are used for this session only.").font(.caption).foregroundStyle(.secondary)
+            Text("Credentials are used for this session only.").font(.callout).foregroundStyle(.secondary)
         }
     }
     private var appearance: some View {
@@ -146,7 +140,7 @@ struct ConnectionEditor: View {
                         ForEach(["Midnight", "Solarized", "Paper"], id: \.self) { Text($0) }
                     }
                     Stepper("Font size: \(Int(draft.fontSize)) pt", value: $draft.fontSize, in: 9...32)
-                    Text("10,000 lines of scrollback. Use ⌘F to find text in a session.").font(.caption)
+                    Text("10,000 lines of scrollback. Use ⌘F to find text in a session.").font(.callout)
                         .foregroundStyle(.secondary)
                 }
             } else {
@@ -156,7 +150,7 @@ struct ConnectionEditor: View {
                             Text(mode.title).tag(mode)
                         }
                     }
-                    Text(draft.displayMode.explanation).font(.caption).foregroundStyle(.secondary)
+                    Text(draft.displayMode.explanation).font(.callout).foregroundStyle(.secondary)
                     if draft.displayMode != .matchWindow {
                         TextField("Desktop width", value: $draft.desktopWidth, format: .number.grouping(.never))
                         TextField("Desktop height", value: $draft.desktopHeight, format: .number.grouping(.never))
@@ -164,9 +158,9 @@ struct ConnectionEditor: View {
                     if draft.displayMode == .fit {
                         Toggle("Resize remote desktop with window", isOn: $draft.dynamicResolution)
                         Text("Requires server support. Otherwise the desktop remains scaled to fit.")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.callout).foregroundStyle(.secondary)
                     }
-                    Text("Display changes apply when you reconnect.").font(.caption).foregroundStyle(.secondary)
+                    Text("Display changes apply when you reconnect.").font(.callout).foregroundStyle(.secondary)
                 }
             }
         }
@@ -179,7 +173,7 @@ struct ConnectionEditor: View {
                     Toggle("Play remote sound on this Mac", isOn: $draft.audioPlayback)
                     Text(
                         "Enable clipboard sharing to copy text between this Mac and the selected desktop. Use ⌘C and ⌘V, or Windows Control+C and Control+V. Changes apply when you reconnect."
-                    ).font(.caption).foregroundStyle(.secondary)
+                    ).font(.callout).foregroundStyle(.secondary)
                 }
             }
             Section("Server identity") {
@@ -251,8 +245,8 @@ private struct ConnectionOptionsStyle: DisclosureGroupStyle {
                     configuration.label
                     Spacer()
                     Image(systemName: configuration.isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                }.frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                        .font(.body.weight(.semibold)).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     .contentShape(Rectangle())
             }.buttonStyle(.plain)
                 .accessibilityValue(configuration.isExpanded ? "Expanded" : "Collapsed")

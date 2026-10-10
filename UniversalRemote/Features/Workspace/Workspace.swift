@@ -12,9 +12,31 @@ import UniformTypeIdentifiers
     @Published var editor: EditorRequest?
     @Published var showWireGuard = false
     @Published var showInspector = false
-    let trust = TrustStore()
+    let trust: TrustStore
+    private let loadCredential: (UUID) throws -> ConnectionCredential?
+    private let defaults: UserDefaults
     var modelContext: ModelContext?
     var selectedSession: RemoteSession? { sessions.first { $0.id == selectedSessionID } }
+
+    init(
+        loadCredential: @escaping (UUID) throws -> ConnectionCredential? = CredentialStore.load,
+        defaults: UserDefaults = .standard
+    ) {
+        self.loadCredential = loadCredential
+        self.defaults = defaults
+        trust = TrustStore(defaults: defaults)
+    }
+
+    private func credential(for draft: ConnectionDraft, provided: ConnectionCredential? = nil) throws
+        -> ConnectionCredential?
+    {
+        if draft.kind == .ssh && draft.authentication == .interactive { return ConnectionCredential() }
+        return try provided ?? loadCredential(draft.id)
+    }
+
+    private func start(_ session: RemoteSession, credential: ConnectionCredential?) {
+        if let credential { session.start(credential: credential) } else { session.askForCredentials() }
+    }
     func chooseTestServerFile() {
         let panel = NSOpenPanel()
         panel.title = "Import Test Servers"
@@ -45,13 +67,11 @@ import UniformTypeIdentifiers
             return
         }
         do {
-            let stored =
-                draft.kind == .ssh && draft.authentication == .interactive
-                ? ConnectionCredential() : try credential ?? CredentialStore.load(draft.id)
+            let stored = try self.credential(for: draft, provided: credential)
             let session = RemoteSession(profile: draft, workspace: self, persistent: persistent)
             sessions.append(session)
             select(session.id)
-            if let stored { session.start(credential: stored) } else { session.askForCredentials() }
+            start(session, credential: stored)
             persistWorkspace()
         } catch { self.error = error.localizedDescription }
     }
@@ -62,7 +82,7 @@ import UniformTypeIdentifiers
         DispatchQueue.main.async { [weak self] in self?.selectedSession?.focus() }
     }
     func close(_ session: RemoteSession) {
-        let index = sessions.firstIndex { $0.id == session.id } ?? 0
+        guard let index = sessions.firstIndex(where: { $0.id == session.id }) else { return }
         session.disconnect()
         sessions.removeAll { $0.id == session.id }
         if selectedSessionID == session.id {
@@ -71,6 +91,7 @@ import UniformTypeIdentifiers
         persistWorkspace()
     }
     func reconnect(_ session: RemoteSession) {
+        guard let index = sessions.firstIndex(where: { $0.id == session.id }) else { return }
         var draft = session.profile
         let persistent = session.persistent
         if persistent, let modelContext {
@@ -84,12 +105,30 @@ import UniformTypeIdentifiers
                 return
             }
         }
-        close(session)
-        connect(draft, persistent: persistent)
+        guard draft.validationMessage == nil else {
+            error = draft.validationMessage
+            return
+        }
+        do {
+            // Resolve failures before replacing the existing tab or transport.
+            let stored: ConnectionCredential?
+            if session.credentialsRejected && draft.authentication != .interactive {
+                stored = nil
+            } else {
+                stored = try credential(for: draft)
+            }
+            let replacement = RemoteSession(profile: draft, workspace: self, persistent: persistent)
+            let wasSelected = selectedSessionID == session.id
+            session.disconnect()
+            sessions[index] = replacement
+            if wasSelected { select(replacement.id) }
+            start(replacement, credential: stored)
+            persistWorkspace()
+        } catch { self.error = error.localizedDescription }
     }
     func enqueue(_ prompt: SessionPrompt) { prompts.append(prompt) }
     func cancelPrompts(sessionID: UUID) {
-        prompts.filter { $0.sessionID == sessionID }.forEach { $0.waiter.resolve(nil) }
+        for prompt in prompts where prompt.sessionID == sessionID { prompt.waiter.resolve(nil) }
         prompts.removeAll { $0.sessionID == sessionID }
     }
     func answer(_ prompt: SessionPrompt, value: String?, remember: Bool = false) {
@@ -110,17 +149,18 @@ import UniformTypeIdentifiers
             let to = sessions.firstIndex(where: { $0.id == destination }), from != to
         else { return }
         let session = sessions.remove(at: from)
-        sessions.insert(session, at: to)
+        sessions.insert(session, at: from < to ? to - 1 : to)
         persistWorkspace()
     }
     func persistWorkspace() {
-        UserDefaults.standard.set(sessions.map { $0.profile.id.uuidString }, forKey: "workspaceConnections")
+        defaults.set(
+            sessions.filter(\.persistent).map { $0.profile.id.uuidString }, forKey: "workspaceConnections")
     }
     func restoreWorkspace(_ saved: [SavedConnection]) {
-        guard sessions.isEmpty, UserDefaults.standard.object(forKey: "restoreWorkspace") as? Bool ?? true else {
+        guard sessions.isEmpty, defaults.object(forKey: "restoreWorkspace") as? Bool ?? true else {
             return
         }
-        for id in UserDefaults.standard.stringArray(forKey: "workspaceConnections") ?? [] {
+        for id in defaults.stringArray(forKey: "workspaceConnections") ?? [] {
             guard let profile = saved.first(where: { $0.id.uuidString == id }) else { continue }
             let session = RemoteSession(profile: ConnectionDraft(profile), workspace: self)
             session.state = .disconnected
@@ -131,6 +171,6 @@ import UniformTypeIdentifiers
     }
     func shutdown() {
         persistWorkspace()
-        sessions.forEach { $0.disconnect() }
+        for session in sessions { session.disconnect() }
     }
 }

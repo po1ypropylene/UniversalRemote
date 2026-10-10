@@ -32,14 +32,14 @@ struct TestServerImportView: View {
             Text(
                 "Saved passwords use Keychain when available; otherwise owner-only local files, which are not encrypted. Passwords are never saved in the connection database. Server trust is checked when you connect. Private keys can be added later in Edit Connection."
             )
-            .font(.caption).foregroundStyle(.secondary)
+            .font(.callout).foregroundStyle(.secondary)
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }
-                Button("Import") { importServers() }.buttonStyle(.glassProminent)
+                PrimaryActionButton(title: "Import") { importServers() }
                     .disabled(document.enabledServers.isEmpty)
             }
-        }.padding(24).frame(width: 540)
+        }.buttonStyle(ComfortableButtonStyle()).controlSize(.large).padding(24).frame(width: 600)
     }
 
     private func importServers() {

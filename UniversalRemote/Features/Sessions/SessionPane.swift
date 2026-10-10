@@ -1,3 +1,4 @@
+import AppKit
 import SwiftTerm
 import SwiftUI
 
@@ -17,9 +18,13 @@ struct SessionPane: View {
                 if let terminal = session.terminal {
                     VStack(spacing: 0) {
                         HStack {
-                            Picker("SSH workspace", selection: $session.sshMode) {
-                                ForEach(SSHWorkspaceMode.allCases) { mode in Text(mode.rawValue).tag(mode) }
-                            }.labelsHidden().pickerStyle(.segmented).frame(width: 280)
+                            SSHWorkspacePicker(
+                                selection: $session.sshMode, terminalAvailable: session.terminalAvailable
+                            )
+                            .frame(width: 320, height: 44)
+                            if !session.terminalAvailable {
+                                Text("File transfer only").font(.callout).foregroundStyle(.secondary)
+                            }
                             Spacer()
                         }.padding(8).background(.bar)
                         switch session.sshMode {
@@ -55,7 +60,10 @@ struct SessionPane: View {
                         } else {
                             HStack {
                                 Button("Close") { workspace.close(session) }
-                                Button("Reconnect") { workspace.reconnect(session) }.buttonStyle(.glassProminent)
+                                PrimaryActionButton(title: session.credentialsRejected ? "Retry sign-in" : "Reconnect")
+                                {
+                                    workspace.reconnect(session)
+                                }
                             }
                         }
                     }.padding(32).glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24)).padding(32)
@@ -72,26 +80,60 @@ struct SessionPane: View {
                 if session.profile.kind == .rdp {
                     Button("Ctrl + Alt + Delete") { session.controlAltDelete() }.disabled(session.state != .connected)
                 } else {
-                    Button {
+                    IconActionButton(title: "Decrease terminal font size", symbol: "minus.magnifyingglass") {
                         session.terminal?.zoom(-1)
-                    } label: {
-                        Image(systemName: "minus.magnifyingglass")
-                    }
-                    Button {
+                    }.disabled(!session.terminalAvailable)
+                    IconActionButton(title: "Increase terminal font size", symbol: "plus.magnifyingglass") {
                         session.terminal?.zoom(1)
-                    } label: {
-                        Image(systemName: "plus.magnifyingglass")
-                    }
-                    Button {
+                    }.disabled(!session.terminalAvailable)
+                    IconActionButton(title: "Find in terminal", symbol: "magnifyingglass") {
                         session.terminal?.find()
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                    }.help("Find in terminal")
+                    }.disabled(session.state != .connected || !session.terminalAvailable)
                 }
                 Text(session.profile.kind.rawValue).fontWeight(.semibold)
-            }.buttonStyle(.borderless).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 14).padding(
-                .vertical, 8
-            ).background(.bar)
+            }.buttonStyle(ComfortableButtonStyle()).font(.callout).foregroundStyle(.secondary).padding(.horizontal, 14)
+                .padding(
+                    .vertical, 8
+                ).background(.bar)
+        }.buttonStyle(ComfortableButtonStyle()).controlSize(.large)
+    }
+}
+
+// SwiftUI's macOS segmented Picker ignores disabled state on individual items.
+// AppKit retains native keyboard/accessibility behavior and disables each segment.
+private struct SSHWorkspacePicker: NSViewRepresentable {
+    @Binding var selection: SSHWorkspaceMode
+    let terminalAvailable: Bool
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeNSView(context: Context) -> NSSegmentedControl {
+        let control = NSSegmentedControl(
+            labels: SSHWorkspaceMode.allCases.map(\.rawValue), trackingMode: .selectOne,
+            target: context.coordinator, action: #selector(Coordinator.selectMode(_:)))
+        control.controlSize = .large
+        control.font = .preferredFont(forTextStyle: .title3)
+        control.setAccessibilityLabel("SSH workspace")
+        return control
+    }
+    func updateNSView(_ control: NSSegmentedControl, context: Context) {
+        context.coordinator.parent = self
+        for (index, mode) in SSHWorkspaceMode.allCases.enumerated() {
+            control.setEnabled(terminalAvailable || mode == .files, forSegment: index)
+            control.setWidth(0, forSegment: index)
+        }
+        let mode = terminalAvailable ? selection : .files
+        control.selectedSegment = SSHWorkspaceMode.allCases.firstIndex(of: mode) ?? 0
+        control.setAccessibilityHelp(
+            terminalAvailable ? "SSH workspace" : "This connection supports file transfer only.")
+    }
+    @MainActor final class Coordinator: NSObject {
+        var parent: SSHWorkspacePicker
+        init(_ parent: SSHWorkspacePicker) { self.parent = parent }
+        @objc func selectMode(_ control: NSSegmentedControl) {
+            guard SSHWorkspaceMode.allCases.indices.contains(control.selectedSegment) else { return }
+            let mode = SSHWorkspaceMode.allCases[control.selectedSegment]
+            guard parent.terminalAvailable || mode == .files else { return }
+            parent.selection = mode
         }
     }
 }
