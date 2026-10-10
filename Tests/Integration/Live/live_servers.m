@@ -5,13 +5,32 @@
 #include <unistd.h>
 
 // No connection details, remote terminal data or library diagnostics reach
-// stdout. Each connection authenticates and opens a shell/desktop, then
-// disconnects.
+// stdout. Each connection authenticates and opens a shell/desktop or reads
+// SFTP directory metadata without printing names, then disconnects.
 int main(int argc, char **argv) {
     @autoreleasepool {
-        if (argc < 2 || argc > 3)
+        if (argc < 2)
             return 2;
-        BOOL configured = argc == 3 && !strcmp(argv[2], "--configured");
+        BOOL configured = NO, sftp = NO;
+        NSInteger selectedServer = 0;
+        for (int argument = 2; argument < argc; argument++) {
+            if (!strcmp(argv[argument], "--configured"))
+                configured = YES;
+            else if (!strcmp(argv[argument], "--sftp"))
+                sftp = YES;
+            else if (!strncmp(argv[argument], "--server=", 9)) {
+                char *end;
+                selectedServer = strtol(argv[argument] + 9, &end, 10);
+                if (*end || selectedServer < 1 || selectedServer > 100)
+                    return 2;
+            } else
+                return 2;
+        }
+        NSString *pinOverride = NSProcessInfo.processInfo.environment[@"UNIVERSALREMOTE_TEST_SSH_PIN"];
+        if (pinOverride && (!selectedServer || ![pinOverride hasPrefix:@"SHA256:"])) {
+            puts("FAIL: a trusted SSH pin override requires one selected server.");
+            return 2;
+        }
         setbuf(stdout, NULL);
         struct stat attributes;
         if (lstat(argv[1], &attributes) != 0 || !S_ISREG(attributes.st_mode) || attributes.st_uid != getuid() ||
@@ -27,9 +46,12 @@ int main(int argc, char **argv) {
             puts("FAIL: invalid local test-server document.");
             return 2;
         }
-        int index = 0, failures = 0;
+        int index = 0, failures = 0, tested = 0;
         NSMutableSet *ids = [NSMutableSet new];
         for (id item in document[@"servers"]) {
+            index++;
+            if (selectedServer && selectedServer != index)
+                continue;
             if (![item isKindOfClass:NSDictionary.class] || ![item[@"enabled"] isKindOfClass:NSNumber.class]) {
                 puts("FAIL: invalid server entry.");
                 return 2;
@@ -39,7 +61,7 @@ int main(int argc, char **argv) {
                     ![item[@"username"] isKindOfClass:NSString.class] || ![item[@"username"] length])
                     continue;
             }
-            index++;
+            tested++;
             NSString *kind = item[@"protocol"], *host = item[@"host"], *username = item[@"username"];
             NSString *password = item[@"password"] ?: @"", *domain = item[@"domain"] ?: @"";
             NSString *pin = item[@"expectedFingerprint"] ?: @"";
@@ -48,6 +70,8 @@ int main(int argc, char **argv) {
             id portValue = item[@"port"];
             BOOL ssh = [kind isKindOfClass:NSString.class] && [kind isEqualToString:@"SSH"];
             BOOL rdp = [kind isKindOfClass:NSString.class] && [kind isEqualToString:@"RDP"];
+            if (ssh && pinOverride)
+                pin = pinOverride;
             BOOL valid =
                 identifier && ![ids containsObject:identifier] && (ssh || rdp) && [host isKindOfClass:NSString.class] &&
                 host.length > 0 &&
@@ -56,7 +80,7 @@ int main(int argc, char **argv) {
                 [password isKindOfClass:NSString.class] && [domain isKindOfClass:NSString.class] &&
                 [pin isKindOfClass:NSString.class] && [portValue isKindOfClass:NSNumber.class] &&
                 [portValue integerValue] >= 1 && [portValue integerValue] <= 65535 &&
-                (!ssh || [pin hasPrefix:@"SHA256:"]);
+                (!ssh || [pin hasPrefix:@"SHA256:"]) && (!sftp || ssh);
             if (!valid) {
                 printf("FAIL server %d: invalid entry or missing SSH fingerprint.\n", index);
                 failures++;
@@ -65,7 +89,9 @@ int main(int argc, char **argv) {
             [ids addObject:identifier];
             NSInteger port = [portValue integerValue];
             dispatch_semaphore_t done = dispatch_semaphore_create(0);
-            __block BOOL connected = NO, failed = NO, frame = NO;
+            __block BOOL connected = NO, failed = NO, frame = NO, filesReady = NO, filesRequested = NO;
+            __block BOOL terminalAvailable = YES;
+            __block NSString *stage = @"connection";
             BOOL (^trust)(NSString *, NSString *) = ^BOOL(NSString *fingerprint, NSString *details) {
               return pin.length > 0 && [fingerprint isEqualToString:pin];
             };
@@ -74,9 +100,17 @@ int main(int argc, char **argv) {
             __weak URSSHClient *weakSSH = sshClient;
             __weak URRDPClient *weakRDP = rdpClient;
             void (^status)(NSString *, NSString *) = ^(NSString *state, NSString *message) {
+              if ([state isEqualToString:@"verifying"])
+                  stage = @"identity";
+              if ([state isEqualToString:@"authenticating"])
+                  stage = @"authentication";
               if ([state isEqualToString:@"connected"]) {
                   connected = YES;
-                  if (ssh)
+                  stage = sftp ? @"SFTP availability" : @"session";
+                  if (sftp && !filesRequested) {
+                      filesRequested = YES;
+                      [weakSSH listDirectory:@"." requestID:@"probe"];
+                  } else if (ssh && !sftp)
                       [weakSSH disconnect];
               }
               if ([state isEqualToString:@"failed"])
@@ -91,6 +125,17 @@ int main(int argc, char **argv) {
                 };
                 sshClient.onPrompt = ^NSString *(NSString *prompt, BOOL echo) {
                   return nil;
+                };
+                sshClient.onTerminalAvailability = ^(BOOL available) {
+                  terminalAvailable = available;
+                };
+                sshClient.onFiles = ^(NSString *request, NSDictionary *result, NSString *error) {
+                  filesReady = !error && [result[@"entries"] isKindOfClass:NSArray.class];
+                  // Allow an accepted-but-exiting forced shell to report its capability.
+                  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC),
+                                 dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+                                   [weakSSH disconnect];
+                                 });
                 };
                 [sshClient connectHost:host
                                   port:port
@@ -135,15 +180,21 @@ int main(int argc, char **argv) {
             BOOL timeout = dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 40 * NSEC_PER_SEC)) != 0;
             [sshClient disconnect];
             [rdpClient disconnect];
-            BOOL pass = !timeout && connected && !failed && (ssh || frame);
-            printf("%s server %d (%s): %s\n", pass ? "PASS" : "FAIL", index, ssh ? "SSH" : "RDP",
-                   pass ? (ssh ? "authenticated session opened" : "authenticated desktop pixels received")
-                        : (connected && rdp ? "connected but no visible desktop received"
-                                            : "connection, identity, authentication or timeout check failed"));
+            BOOL pass = !timeout && connected && !failed && (ssh || frame) && (!sftp || filesReady);
+            NSString *detail =
+                pass ? (sftp ? (terminalAvailable ? @"authenticated SFTP directory opened"
+                                                  : @"authenticated SFTP directory opened; file transfer only")
+                             : (ssh ? @"authenticated session opened" : @"authenticated desktop pixels received"))
+                     : [stage stringByAppendingString:@" check failed or timed out"];
+            printf("%s server %d (%s): %s\n", pass ? "PASS" : "FAIL", index, ssh ? "SSH" : "RDP", detail.UTF8String);
             if (!pass)
                 failures++;
         }
-        if (!index)
+        if (!tested && selectedServer) {
+            puts("FAIL: selected server is missing, disabled or unconfigured.");
+            return 2;
+        }
+        if (!tested)
             puts("SKIP: no enabled real servers. Fill the local file before testing.");
         return failures ? 1 : 0;
     }

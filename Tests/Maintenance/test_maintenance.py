@@ -46,7 +46,7 @@ class MaintenanceTests(unittest.TestCase):
         self.assertFalse((self.root / '.build/test-fixture').exists())
         self.assertFalse((self.root / 'debug.log').exists())
 
-    def test_cleanup_refuses_symlinked_dependency_parent(self):
+    def test_cleanup_refuses_redirected_build_directory(self):
         module = load('clean-project')
         self.git('init', '-q')
         outside = self.root / 'keep'
@@ -73,11 +73,35 @@ class MaintenanceTests(unittest.TestCase):
             module.remove(path)
         for relative in module.PRESERVED:
             self.assertEqual((self.root / relative / 'sentinel').read_text(), 'dependency')
+        self.assertFalse((self.root / '.build').exists())
         self.assertFalse((self.root / '.build/Xcode/Build').exists())
         self.assertFalse((self.root / '.build/wireguard/fixture').exists())
         self.assertFalse((self.root / '.build/rdp-fixture').exists())
         self.assertFalse((self.root / '.build/core-tests/debug').exists())
         self.assertFalse((self.root / 'DerivedData/Logs').exists())
+
+    def test_test_harness_cleans_success_failure_and_child_processes(self):
+        support = ROOT / 'scripts/test-support.sh'
+        for status in (0, 7):
+            command = f"""set -euo pipefail
+source "{support}" synthetic
+printf '%s' "$fixture_root" > run-path
+sleep 30 &
+fixture_pids+=("$!")
+printf '%s' "$!" > child-pid
+printf 'synthetic log' > "$fixture_root/server.log"
+exit {status}
+"""
+            result = subprocess.run(['/bin/bash', '-c', command], cwd=self.root)
+            self.assertEqual(result.returncode, status)
+            self.assertFalse(Path((self.root / 'run-path').read_text()).exists())
+            pid = int((self.root / 'child-pid').read_text())
+            import os
+            with self.assertRaises(ProcessLookupError):
+                os.kill(pid, 0)
+        result = subprocess.run(['/bin/bash', '-c', f'set -euo pipefail; source "{support}" empty'], cwd=self.root)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(list((self.root / '.build/tests').iterdir()), [])
 
     def test_semver_accepts_prefixed_tags_and_rejects_downgrades(self):
         module = load('update-dependencies')

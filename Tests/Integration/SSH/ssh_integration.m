@@ -14,15 +14,27 @@ int main(int argc, char **argv) {
         __block BOOL trusted = NO, connected = NO, failed = NO, verifiedInput = NO, resized = NO;
         __block int prompts = 0;
         NSMutableString *received = [NSMutableString new];
-        __block BOOL sentExit = NO;
+        __block BOOL sentExit = NO, shellEnded = NO;
+        __block BOOL credentialsRejected = NO;
         __weak URSSHClient *weakClient = client;
+        client.onTerminalAvailability = ^(BOOL available) {
+          if (!available && sentExit) {
+              shellEnded = YES;
+              [weakClient disconnect];
+          }
+        };
         client.onTrust = ^BOOL(NSString *fingerprint, NSString *details) {
           trusted = YES;
           return ![mode isEqualToString:@"reject"];
         };
         client.onPrompt = ^NSString *(NSString *prompt, BOOL echo) {
           prompts++;
-          return [prompt containsString:@"Code"] ? @"123456" : @"fixture-password";
+          if ([mode isEqualToString:@"cancel-prompt"])
+              return nil;
+          return [[prompt lowercaseString] containsString:@"code"] ? @"123456" : @"fixture-password";
+        };
+        client.onAuthenticationRejected = ^{
+          credentialsRejected = YES;
         };
         client.onData = ^(NSData *data) {
           NSString *text = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ?: @"";
@@ -59,8 +71,8 @@ int main(int argc, char **argv) {
                           : nil;
         NSString *password = ([mode isEqualToString:@"key"] || [mode isEqualToString:@"ed25519"])
                                  ? @"fixture-passphrase"
-                             : [mode isEqualToString:@"bad-password"] ? @"wrong"
-                                                                      : @"fixture-password";
+                             : [mode hasPrefix:@"bad-"] ? @"wrong"
+                                                        : @"fixture-password";
         [client connectHost:@"127.0.0.1"
                        port:port
                    username:@"fixture"
@@ -69,12 +81,21 @@ int main(int argc, char **argv) {
              authentication:authentication];
         BOOL timedOut = dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC)) != 0;
         [client disconnect];
-        BOOL expectedFailure = [mode isEqualToString:@"reject"] || [mode isEqualToString:@"bad-password"];
+        BOOL expectedFailure =
+            [mode isEqualToString:@"reject"] || [mode hasPrefix:@"bad-"] || [mode isEqualToString:@"key-only"];
         BOOL passed = !timedOut && trusted && (expectedFailure ? failed && !connected : connected && !failed);
-        if (!expectedFailure && ![mode isEqualToString:@"cancel"])
-            passed = passed && verifiedInput && resized;
+        if ([mode isEqualToString:@"cancel-prompt"])
+            passed = !timedOut && trusted && !failed && !connected && prompts == 1 && !credentialsRejected;
+        if (!expectedFailure && ![mode hasPrefix:@"cancel"])
+            passed = passed && verifiedInput && resized && shellEnded;
         if ([mode isEqualToString:@"interactive"])
             passed = passed && prompts == 2;
+        else if ([mode isEqualToString:@"keyboard-mfa"] || [mode isEqualToString:@"keyboard-code"] ||
+                 [mode isEqualToString:@"keyboard-echo"] || [mode isEqualToString:@"bad-password"])
+            passed = passed && prompts == 1;
+        else if (![mode isEqualToString:@"cancel-prompt"])
+            passed = passed && prompts == 0;
+        passed = passed && (credentialsRejected == [mode hasPrefix:@"bad-"]);
         printf("%s SSH %s\n", passed ? "PASS" : "FAIL", mode.UTF8String);
         return passed ? 0 : 1;
     }

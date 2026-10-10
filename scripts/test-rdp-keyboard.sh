@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-mkdir -p .build/rdp-test
+source scripts/test-support.sh rdp-keyboard
 xcrun swiftc -target arm64-apple-macos27.0 -parse-as-library \
   UniversalRemote/Domain/RDPDisplayMode.swift \
   UniversalRemote/Protocols/RDP/RDPDesktopView.swift Tests/Integration/RDP/keyboard.swift \
-  -o .build/rdp-test/keyboard
-.build/rdp-test/keyboard
+  -o "$fixture_root"/keyboard
+"$fixture_root"/keyboard

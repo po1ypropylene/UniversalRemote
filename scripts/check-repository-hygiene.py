@@ -24,7 +24,7 @@ for encoded in paths:
     if re.search(rb'-----BEGIN (?:[A-Z0-9 ]*PRIVATE KEY|CERTIFICATE)-----\s+[A-Za-z0-9+/=]{30,}', data):
         failures += 1
 # Use synthetic names to test rules; do not enumerate the user's actual secrets.
-probes = ['.local-testing/servers.json', '.local-testing/keys/custom-name', 'sample.pem', 'sample.key', 'sample.p12', 'sample.pfx', 'sample.crt', 'sample.cer', 'sample.der', 'sample.p7b', 'sample.csr', 'sample.jks', 'sample.keystore', 'sample.keychain-db', '.env', '.env.local', 'id_ed25519', '.build/rdp-test/key.pem', 'Vendor/Native/lib/example.dylib']
+probes = ['.local-testing/servers.json', '.local-testing/keys/custom-name', 'sample.pem', 'sample.key', 'sample.p12', 'sample.pfx', 'sample.crt', 'sample.cer', 'sample.der', 'sample.p7b', 'sample.csr', 'sample.jks', 'sample.keystore', 'sample.keychain-db', '.env', '.env.local', 'id_ed25519', '.build/rdp-test/key.pem', 'Vendor/Native/lib/example.dylib', '.dependencies/sources/example', '.dependencies/swift-packages/example']
 for probe in probes:
     if subprocess.run(['git', 'check-ignore', '-q', '--no-index', probe], cwd=root).returncode != 0:
         failures += 1

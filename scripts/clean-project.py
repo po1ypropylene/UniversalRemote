@@ -9,13 +9,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 GENERATED = ('.build', 'DerivedData', 'build')
-PRESERVED = (
-    '.build/dependencies', '.build/openssl', '.build/libssh2', '.build/freerdp',
-    '.build/test-venv', '.build/wireguard/cache', '.build/wireguard/mod',
-    '.build/Xcode/SourcePackages', 'DerivedData/SourcePackages',
-    '.build/core-tests/checkouts', '.build/core-tests/repositories', '.build/core-tests/artifacts',
-    'Vendor/Native',
-)
+PRESERVED = ('.dependencies', 'Vendor/Native')
 
 
 def targets(root):
@@ -23,21 +17,11 @@ def targets(root):
         ['git', 'ls-files', '-z'], cwd=root).decode().split('\0'))
     result = []
 
-    def select(path):
-        relative = str(path.relative_to(root))
-        if relative in PRESERVED:
-            return
-        if any(item.startswith(relative + '/') for item in PRESERVED):
-            if path.is_symlink():
-                raise RuntimeError('Refusing cleanup of a redirected dependency parent.')
-            if path.is_dir():
-                for child in path.iterdir():
-                    select(child)
-        else:
-            result.append(path)
-
     for name in GENERATED:
-        select(root / name)
+        path = root / name
+        if path.is_symlink():
+            raise RuntimeError('Refusing cleanup of a redirected generated directory.')
+        result.append(path)
     for base, dirs, files in os.walk(root, followlinks=False):
         relative = Path(base).relative_to(root)
         dirs[:] = [name for name in dirs if name not in
@@ -110,7 +94,7 @@ def main():
     args = parser.parse_args()
     paths = targets(ROOT)
     print('Project cleanup: build outputs, logs, caches and generated test fixtures.')
-    print('Preserves native libraries, dependency sources/builds, Go modules, Swift packages, test venv,')
+    print('Preserves .dependencies, Vendor/Native,')
     print('tracked files, source fixtures, .local-testing and user Library/Keychain data.')
     print(f'{sum(p.exists() or p.is_symlink() for p in paths)} generated targets present.')
     if args.apply:

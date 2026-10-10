@@ -7,6 +7,6 @@ scripts/prepare-wireguard.sh
 # only the generated app so Xcode cannot skip its final signing on a cached build.
 rm -rf ".build/Xcode/Build/Products/Release/Universal Remote.app"
 xcodebuild -project UniversalRemote.xcodeproj -scheme UniversalRemote -configuration Release \
-  -derivedDataPath .build/Xcode -skipPackagePluginValidation CODE_SIGN_IDENTITY=- ENABLE_HARDENED_RUNTIME=NO build
+  -derivedDataPath .build/Xcode -clonedSourcePackagesDirPath .dependencies/swift-packages -skipPackagePluginValidation CODE_SIGN_IDENTITY=- ENABLE_HARDENED_RUNTIME=NO build
 python3 scripts/verify-bundle.py ".build/Xcode/Build/Products/Release/Universal Remote.app"
 printf 'Built app: %s/.build/Xcode/Build/Products/Release/Universal Remote.app\n' "$PWD"

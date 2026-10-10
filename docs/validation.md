@@ -1,465 +1,223 @@
-# Phase 1 validation
-
-## Incremental Xcode build packaging — 9 October 2026
-
-- Fixed the always-running native-library packaging phase so it replaces the
-  generated third-party-notice directory before copying notices. This avoids a
-  permission failure when a subsequent build encounters existing read-only
-  license files and also prevents removed notices from remaining in the bundle.
-- Repeated Xcode builds passed after the fix. No protocol tests or live-server
-  connections were needed for this packaging-only correction.
-
-## Connection editor scrollbar — 8 October 2026
-
-- Removed the outer ScrollView around the macOS grouped Form. The Form now owns the single scrolling viewport and scrollbar while the header and action buttons stay fixed.
-- Compiled an isolated preview from the actual editor source, using in-memory SwiftData and stubbed credential/trust/network actions. Inspected Display options expansion/collapse, Sharing & server identity expansion and scrolling to its last control. The accessibility hierarchy confirms one scroll area and one vertical scrollbar throughout the inspected states, instead of the previous nested scroll areas.
-- Release build, final bundle platform/dependency/signature/loader verification, repository hygiene and diff whitespace checks passed. Swift formatting used the repository configuration. Initial sandbox cache/macro restrictions were resolved by building with the required access.
-- This layout-only change did not repeat protocol tests or connect to servers. Visual checks inspected settled UI states; no automated frame-by-frame animation measurement was performed.
-
-## Form, RDP clipboard and audio — 8 October 2026
-
-- Release build passed with the rebuilt pinned Mac audio backend; final bundle platform, native-library closure, signatures and pre-UI loader checks passed.
-- An isolated preview used the actual connection editor with in-memory SwiftData and stubbed credential/network actions. Clicking the blank middle of both Display options and Sharing & server identity expanded them. Separate address/port labels, RDP 3389 guidance and SSH 22 switching were inspected. No real credentials or clipboard contents were accessed.
-- Twelve core tests passed, including separate address/port validation, IPv6, and saved audio preferences. A disposable database created with the previous SavedConnection schema reopened with the new schema, preserving its synthetic profile, notes and clipboard setting while applying the audio default.
-- Seven synthetic SSH tests, four RDP TLS tests, five RDP NLA tests and four protected-file probe fixture checks passed. Both RDP suites now round-trip synthetic Chinese text, emoji, line breaks, subsequent updates and an empty clipboard through the protocol channel.
-- The actual Mac audio backend passed registration, output-device initialization, silent PCM playback and shutdown. This is a local backend check, not proof of audible playback from a production RDP server.
-- Synthetic keyboard-handler checks passed for Command+C/X/V/A, paste synchronization before key events, Command release, native Control+V, reserved app shortcuts and disconnected input. No system clipboard was read or changed.
-- The production Workspace reconnect method passed an isolated in-memory check with stubbed credentials/transports: it reloads saved clipboard/audio edits, preserves ad hoc session settings, and retains a deleted profile's session snapshot. The final Release build and bundle verification passed after this correction.
-- Repository hygiene and diff whitespace checks passed. Real-server clipboard integration, audible remote playback and server redirection policies remain unverified for this change. Save sharing changes and reconnect an existing session to apply them.
-
-## Add-connection form — 8 October 2026
-
-The Organization & notes section and its controls are removed from every connection
-editor mode: New connection, Quick Connect and Edit connection. Existing folder, favorite and notes data
-is preserved. The formatted Swift source passed the Release build, final bundle
-and loader verification, repository hygiene and diff whitespace checks. This
-form-only change did not repeat protocol tests or live-server connections; visual
-UI inspection was not performed.
-
-Checked on 7 October 2026, on the development Apple silicon Mac with Xcode 27.
-
-## Completed
-
-- Debug and Release Xcode builds.
-- App launch and visual inspection of the workspace and connection editor.
-- Live SSH UI connection, fingerprint comparison, ANSI rendering, PTY resize,
-  and keyboard input round trip against a synthetic local server.
-- Live RDP UI certificate verification, Metal desktop rendering, and mouse/keyboard
-  input against the synthetic sample desktop.
-- Core tests: profile validation/IPv6 normalization, endpoint separation,
-  SwiftData disk persistence, credential serialization, remembered identity
-  management, and prompt cancellation/single resolution.
-- Synthetic SSH adapter integrations: password, encrypted RSA and OpenSSH
-  Ed25519 keys, two-prompt authentication, wrong password, rejected server trust,
-  cancellation, input bytes, and terminal resize.
-- Synthetic RDP adapter integrations over TLS and NLA: accepted certificate,
-  rejected certificate, desktop framebuffer, cancellation, and incorrect NLA credentials.
-- Native library closure bundled and load commands relocated into the app.
-- Ad-hoc signature verification of the release bundle.
-
-These synthetic tests prove adapter integration, not complete compatibility with
-all production OpenSSH, Windows, or xrdp configurations.
-
-## Still needed before a production release
-
-- Real Windows 10/11, Windows Server, and xrdp sessions, including server policies.
-- RDP clipboard both directions, dynamic display control, cursor shapes, Retina
-  scaling and pointer coordinates, Unicode/IME, and additional keyboard layouts.
-- SSH full-screen programs (`vim`, `tmux`, `top`) and a broad real-server algorithm
-  matrix; slow output, large pastes, long sessions, and key-format coverage.
-- Concurrent mixed sessions, suspend/resume, changed networks, failed DNS, and
-  repeated reconnect/disconnect under memory and thread diagnostics.
-- Persistence/edit/folder/drag/drop workflows and Keychain behavior with a stable
-  release signing identity; VoiceOver and complete keyboard-only navigation.
-- Developer ID signing, notarization, distribution packaging,
-  and a chosen license for Universal Remote's own source.
-
-## Follow-up hardening
-
-- App/project/native build targets changed to macOS 27 and arm64 only.
-- Sources organized by feature, domain, persistence, security and protocol.
-- Protected, ignored local credentials template; explicit import creates visible Test Servers profiles without automatic connections/trust.
-- Additional core coverage for import filtering, normalization, invalid/redacted inputs, duplicate IDs, folder placement and idempotence.
-- Local signing defaults corrected and packaging rejects ad-hoc + hardened runtime; final bundle verifier exercises the loader.
-- Real-server probe reads owner-only local JSON, pins SSH/untrusted RDP identities, suppresses library diagnostics and sends no remote commands/input.
-
-See docs/local-testing.md and docs/crash-2026-10-07.md. No real server was supplied yet; disabled entries produce SKIP, not a production-server pass. Follow-up verification completed: ten core tests, seven SSH checks, three TLS RDP checks, four NLA RDP checks, and four protected-file probe checks (28 total). Debug and Release builds plus packaging/signatures/loader checks passed; every native library reports a macOS 27 deployment minimum. The running updated app showed the Import Test Servers menu and a redacted two-entry preview with password storage off; the preview was cancelled to avoid adding synthetic profiles to the user library. Folder placement and idempotence were verified using an isolated SwiftData store. Repository hygiene and the incompatible-signing rejection guard passed.
-
-## Universal Remote rebrand and icon
-
-All repository-owned file names, source, comments, native adapter prefixes, project/target names, module imports, bundle/Keychain identifiers, fixture environment variables and documentation were renamed. The outer checkout remains user-managed; source paths are relative. No retired product-name references remain in owned source/text/file names, and retired generated products were removed.
-
-The original two-layer app icon is a macOS-only Icon Composer document, compiled into the application with actool. Default, Dark and Mono exports plus 16/32/64/128 previews were visually inspected. A matching template glyph appears in the sidebar. The running Release app shows the new window, menu and sidebar name. The renamed core module's ten tests and the seven SSH, three RDP TLS, four NLA and four protected-file fixture checks passed (28 total). Debug and Release build/signatures/loader verification passed. Rebranding uses a new app container/Keychain namespace; pre-rebrand data is untouched and can be reimported. See docs/branding.md.
-
-## Credential, RDP and UI fixes — 8 October 2026
-
-- Rebuilt pinned dependencies after checkout relocation; stale native absolute load paths had prevented the standalone probes from launching. Final Release build, bundled dependency/signature checks and pre-UI loader check passed.
-- Twelve core tests passed, including local credential reopening, replacement, private-key bytes, directory/file permissions, cleanup and symlink-directory rejection.
-- A disposable synthetic credential passed save/reload/delete in the actual development environment; that command-line process used Keychain. This does not establish the original app's Keychain failure reason or attribute it to developer-program enrollment.
-- An isolated UI review app used an in-memory SwiftData library and synthetic names. Visually inspected the unified form, RDP domain/default-port switch and rounded Liquid Glass tabs; exercised a synthetic UI Save without a displayed error. No real server details or remote desktop screenshots were captured.
-- Seven SSH, three RDP TLS, four RDP NLA and four protected-file fixture checks passed. Protected-file probes now require nonblack pixels, not just allocated framebuffer dimensions.
-- Authorized live probes selected populated disabled entries without changing the protected JSON. Server 2 (RDP) authenticated but produced no visible frame with GFX enabled; standard software bitmap negotiation produced visible desktop pixels in two subsequent probes. No keyboard, pointer, clipboard or shell commands were sent to real servers. Real Metal/UI input, clipboard, dynamic resizing and long-session behavior remain unverified.
-- Server 1 (SSH) was not authenticated by the probe because its independently verified SHA256 fingerprint was absent. This is a blocked identity check, not a real SSH interoperability pass or evidence of an SSH regression.
-- Repository hygiene and diff whitespace checks passed. No commit or publication was performed; the user's local test JSON was preserved.
-
-The local credential fallback is owner-only but unencrypted, as requested for this development app. Distribution signing/notarization and broad production-server compatibility remain pending.
-
-## Live user-flow review — 8 October 2026
-
-The subsequent authorized UI run authenticated both supplied servers, verified saved/edit/relaunch workflows, mixed sessions, RDP Metal rendering, mouse/ASCII input, Ctrl–Alt–Delete, disconnect/reconnect and full-screen entry/exit. SSH command execution, ANSI/UTF-8 output, scrolling, font adjustment and search selection passed. The SSH host identity matched the public key independently supplied by the user.
-
-The review found a development-build Keychain authorization stall, reconnect tab reordering and unavailable RDP dynamic resizing on the supplied server. Unicode keyboard entry and clipboard remain unverified. A private build used the production UI/actions with isolated data and in-memory credential filling; later session checks used a private local credential directory after the Keychain stall. See [the full workflow report](user-flow-testing-2026-10-08.md) for evidence, distinctions and remaining coverage. Disposable test profiles/local credential files were removed, sessions disconnected, and the protected server JSON's hash and permissions were unchanged. Keychain cleanup was attempted without interaction; absence was not independently verified.
-
-## Official displayed name — 8 October 2026
-
-All app-authored visible brand text now uses **Universal Remote**, including window/sidebar titles, alerts, key-import/trust text, local-network permission text and loader diagnostics. Debug/Release settings explicitly set the bundle display/name fields and build `Universal Remote.app`; the Swift module, bundle identifier and credential/storage namespaces remain stable. The Release build passed final bundle platform, native dependency, signature and pre-UI loader verification. The built plist confirms the display name, bundle name and executable spelling. Repository hygiene and diff whitespace checks passed. This text-only change did not repeat protocol tests or connect to servers.
-
-## Shared version and DMG packaging — 8 October 2026
-
-- Version.xcconfig supplies version 0.1.0 / build 1 to both Debug and Release; verified resolved Xcode build settings and the built Info.plist. Duplicate target version settings were removed.
-- scripts/build-dmg.sh completed end to end using macOS 27 diskutil image creation/attachment and exact temporary-volume ejection. The compressed read-only image contains the app and Applications shortcut; hdiutil checksum verification and mounted app platform/dependency/signature/loader checks passed.
-- Repeated cached app builds passed after build.sh was corrected to recreate only the generated app product before Xcode builds/signs it. The first incremental attempt had failed final resource-seal verification after the always-running native packaging phase.
-- The output filename derives from built bundle metadata. Version 0.1.0 / build 1 produced Universal-Remote-0.1.0-build-1-arm64.dmg and its SHA256 file; the checksum was independently checked. Generated outputs are Git-ignored and temporary staging was cleaned.
-- Shell syntax, project-plist validation and repository hygiene passed. No app UI/session tests or live servers were used for this packaging change. The DMG is ad-hoc signed through its app and unnotarized; Developer ID distribution and testing the installed app on another Mac remain pending. No commit, tag, upload or release was made.
-
-
-## Embedded WireGuard — 9 October 2026
-
-- Sixteen core tests passed, including bounded/redacted single-peer configuration
-  import, unsafe/duplicate fields, key/metadata separation, optional credential
-  decoding, persisted selection and fail-closed references after deletion.
-- Race-enabled Go tests passed with generated keys and loopback UDP peers:
-  encrypted TCP/half-close, bad local token rejection, AllowedIPs/DNS restriction,
-  cancelled dialing, parent EOF cleanup, shared-device independent sessions and
-  cancellation during an invalid-peer handshake.
-- Synthetic RDP over the actual encrypted WireGuard/netstack/loopback/native path
-  passed desktop frames, certificate rejection, disconnect and clipboard exchange.
-- The actual Swift transport manager passed shared leases, independent cleanup,
-  changed-profile refusal and cancellation. A native hook fixture verified that
-  TLS/NLA settings retain the real identity, the socket uses token authentication,
-  and redirects to a different host/port are refused.
-- A disposable pre-feature SwiftData library migrated and reopened with its
-  connection/folder/settings preserved; saving and reopening a new tunnel
-  selection passed. No user database or protected test input was read/reset.
-- Existing seven SSH, four TLS RDP, five NLA RDP, audio backend, keyboard and four
-  protected-file synthetic fixture checks passed. No real servers were connected.
-- Final Release build passed bundled helper/library signatures, arm64-only and
-  macOS 27 deployment checks, relocated dependency checks and the pre-UI loader
-  probe. Repository hygiene, script syntax and diff whitespace checks passed.
-- An isolated in-memory UI app used synthetic profiles and an in-memory credential
-  stub. Visually reviewed the profile manager and RDP selector; loading/editing/
-  saving a profile and reflecting its changed name in the selector passed. This
-  UI exercise does not verify production Keychain access or a real tunnel.
-
-Real WireGuard/RDP server compatibility, internal DNS/IPv6-only peers, endpoint
-roaming, network changes, long sessions and performance remain unverified.
-Dependency pins/checksums and bundled notices are present; a comprehensive
-vulnerability/legal review, Developer ID/notarization and clean-Mac validation
-remain pending. Existing local credential fallback remains unencrypted and
-explicitly disclosed. No commit or publication was performed.
-
-
-## Exported split-tunnel startup fix — 9 October 2026
-
-- Private inspection of the user-selected export confirmed valid key lengths and
-  DNS servers outside AllowedIPs. The previous helper treated this as fatal
-  before creating the WireGuard device. No export contents, keys, endpoint or
-  address values were copied into tracked artifacts/logs.
-- Race-enabled Go tests passed configured DNS outside the tunnel using an isolated
-  ordinary UDP resolver, private DNS across an encrypted synthetic peer, and an
-  encrypted TCP/IP-address connection with out-of-range configured DNS.
-- The export's routing/DNS structure initialized with replacement synthetic keys
-  and an owned loopback endpoint. The real peer was not contacted and the export
-  was unchanged; this is a configuration-structure check, not a live VPN pass.
-- Seventeen core tests passed, including specific startup error decoding and
-  suppression of arbitrary diagnostic content. The existing encrypted RDP
-  accept/reject/disconnect/clipboard and shared-session/cleanup checks passed.
-- Native syntax checking passed against the pinned FreeRDP headers. The native
-  identity fixture covers redacted DNS/destination status messages as well as
-  original TLS/NLA identity, token authentication and redirection refusal.
-
-- The rebuilt Release app passed final helper/library signatures, platform,
-  dependency and loader checks; repository hygiene and diff whitespace passed.
-
-Production WireGuard/RDP connectivity remains for a user retry. The app's DNS
-policy now matches the explicit split routes and can send hostname queries to
-configured public DNS servers; RDP remains fail-closed within AllowedIPs.
-
-
-## Helper initialization under App Sandbox — 9 October 2026
-
-- Reproduced the reported initialization error with the same synthetic settings
-  that passed in an unsandboxed test, after signing the parent with the app's
-  original sandbox/network-client permissions. No real settings or keys were used.
-- The final app had no sandbox inheritance entitlements on its bundled helper
-  and lacked the network-server entitlement needed for UDP reception/local TCP
-  listening. Added only the two required child inheritance keys and parent
-  incoming-network permission; sandboxing stays enabled.
-- The corrected sandboxed synthetic lifecycle passed shared sessions, independent
-  cleanup, changed-profile refusal and cancellation. Native identity/trust/bridge
-  diagnostic checks passed.
-- The rebuilt Release app passed signatures, exact helper inheritance entitlements,
-  parent sandbox/network permissions, platform and dependency checks, the pre-UI
-  loader, and a new helper startup/listener/cleanup probe executed from the actual
-  signed app. Neither pre-UI probe reads saved profiles or credential stores.
-- Project/entitlement plist checks, script syntax, repository hygiene and diff
-  whitespace checks passed. The user's export and saved credentials were untouched.
-
-This closes a gap in the earlier verification: those protocol fixtures used an
-unsandboxed parent and did not establish packaged helper startup. Production
-WireGuard/RDP interoperability remains for the user to retry; no real peer was
-contacted in this investigation. No commit/publication was performed.
-
-
-## RDP display choices — 9 October 2026
-
-- Seventeen core tests passed, including saved display mode reopening and missing/
-  unknown mode fallback to the existing fitted behavior.
-- The disposable pre-feature SwiftData migration passed, preserving profiles,
-  folders and settings, then saving/reopening both tunnel and display selections.
-- Native AppKit/Metal-view checks passed 100% document bounds, horizontal/vertical
-  scrollbars, correct remote pointer coordinates after panning, no resize request
-  in fixed mode, initial viewport measurement without scrollbar overflow, retained
-  resolution after window shrinking, fitted document bounds and keyboard shortcuts.
-- Seven SSH, four TLS RDP, five NLA RDP and four protected-file synthetic fixture
-  checks passed. No real servers or private credential files were used.
-- Final Release build passed final bundle signatures, platform/dependency/loader
-  verification and the sandboxed helper probe. Repository hygiene and diff
-  whitespace checks passed.
-
-The display tests use a disposable native window; real-server resolution
-negotiation, visual quality on different Retina displays and interactive scrolling
-performance remain unverified. A server may return a different starting resolution,
-which becomes the scrollable desktop size. No commit or publication was performed.
-
-
-## Initial SFTP file transfer — 9 October 2026
-
-- Rebuilt the pinned native dependencies. Seventeen core tests, seven SSH tests,
-  four TLS RDP tests, five NLA RDP tests and four protected-file synthetic probe
-  checks passed. The protected probe fixtures use disposable input; the user's
-  private server JSON and saved profiles/credentials were not read.
-- Twelve SFTP checks passed against a disposable, loopback-only server: binary
-  upload/download equality, encrypted private-key and interactive authentication,
-  empty files, missing folders/files, directory-download rejection, local/remote
-  collisions, a destination appearing during transfer, cancellation cleanup and
-  subsystem refusal with continued terminal input/resize. Unicode names and
-  symlink classification were checked; exactly one host-key approval per shared
-  SSH/SFTP connection was required. Terminal input/resize passed during transfers.
-  The collision test also verified that the existing remote bytes were unchanged.
-- A separate sandboxed review app hosted the production SFTPController/SFTPView
-  with synthetic data and the actual native SSH adapter. Visually reviewed the
-  two-pane layout, selected an owned disposable directory with NSOpenPanel, opened
-  local/server subfolders, returned to the parent server folder, uploaded/downloaded
-  through the buttons and observed both refreshed lists. Byte equality and absence
-  of leftover local staging files were verified independently. The review app
-  and fixture server were closed. It did not load SwiftData or Keychain, read the
-  clipboard or contact a real server.
-- The Release app passed final bundle signature, macOS 27/arm64, dependency,
-  pre-UI loader and sandboxed WireGuard helper verification. App Sandbox remains
-  enabled; user-selected file access is now read/write for explicit local folder
-  selection. Repository hygiene and diff whitespace checks passed.
-
-This is a first implementation: one regular file per transfer, no recursive
-folders, queue, overwrite/resume, drag-and-drop, remote metadata editing or
-SFTP-only accounts. Downloads publish only after completion and never replace an
-existing destination. Cancellation disconnects the shared SSH session; interrupted
-uploads may leave partial server files. Local destinations require hard-link
-support. UTF-8 listings are bounded to 20,000 items; the server must supply file
-attributes and enable its SFTP subsystem. The sandboxed UI review covered the
-file pane, while the full Terminal/Files/Split session composition was build-checked.
-Real-server SFTP, long transfers, network changes, large directories, filesystem
-variants, VoiceOver and split-view interaction remain unverified. No commit or
-publication was performed.
-
-
-## SFTP file actions and recursive selections — 9 October 2026
-
-- Thirty-nine synthetic SFTP checks passed: the original twelve protocol cases,
-  nineteen native tree/action checks and eight production-controller local-action
-  checks. Coverage includes nested/empty folders and Unicode/binary byte equality,
-  server copy/move/rename/mkdir/delete, cross-side moves, no-overwrite collisions,
-  descendant refusal, link preflight, recursion bounds, source metadata changing
-  during a move, local multi-copy/cut/rename/mkdir and cancellation. The changed-source
-  test completed its destination copy but refused deletion; the source remained
-  readable. Failed cut/paste preserved its source and buffered entry. The local
-  controller checks run outside App Sandbox with disposable files.
-- In the separate sandboxed review app, Command-click selected a local folder and
-  file together. Right-click exposed the selection-aware menus and uploaded both;
-  the server listing refreshed. Independently verified the nested file bytes,
-  empty directory and second selected file. Server Copy/Paste into another folder
-  and rename through the sheet passed. Inspected and cancelled the cross-side move
-  confirmation. No real files/servers, saved profiles, credentials or clipboard
-  contents were read; Copy Path was source-reviewed without changing the clipboard.
-- Seventeen core tests, seven SSH cases, four TLS RDP cases, five NLA RDP cases and
-  four protected-probe synthetic checks passed. Final Release build and final bundle
-  signatures/platform/dependencies/loader/sandboxed-helper verification passed.
-  Repository hygiene, shell syntax and diff whitespace checks passed. The local
-  test executable/data paths were separated after a repeat-run naming collision;
-  the complete SFTP suite then passed again.
-
-Open/Reveal, macOS Trash, cross-volume local moves, network interruption during
-recursive deletion, large production trees and concurrent remote writers still
-need broader integration testing. The UI review preceded the final local-copy
-cancellation hardening; that hardening passed controller tests and the Release
-build. Server copies need temporary local disk space. Move safety uses metadata,
-not a transactional content snapshot; sources must remain quiescent. Batches stop
-on the first failure, retain completed destinations and can leave partial trees.
-SFTP cancellation disconnects SSH. Remote deletion is permanent and confirmed;
-local deletion requests Trash. Remote Open creates a temporary local snapshot with
-no automatic edit upload. No real remote files were changed, and no commit or
-publication was performed.
-
-
-## SFTP drag/drop, throughput and usability — 9 October 2026
-
-- Forty-eight SFTP checks passed, adding upload/download cancellation with continued
-  terminal input and subsequent file listing on the same login, multi-file/folder
-  drag-provider transfers in both directions, a Finder-style file-URL provider and
-  invalid-token refusal. Binary/nested-file equality was verified through the actual
-  controller/native path. The provider tests use disposable inputs outside App Sandbox.
-- A controlled 16 MiB upload through an owned proxy with 10 ms delay each direction
-  measured 1.06 MiB/s with a 32 KiB window and 30.15 MiB/s with a 1 MiB window (28.4x).
-  An earlier sample measured 0.78/29.81 MiB/s (38.5x). The comparison changes only
-  window size in otherwise identical new code. It validates the pipelining bottleneck,
-  not production-server speed or a guaranteed improvement on all networks.
-- The sandboxed review app used an owned directory as a substitute for Home.
-  Folder permission was granted explicitly, saved as a security-scoped bookmark,
-  and restored across relaunch with its contents automatically listed. The real
-  user's Home was not browsed during testing. Source/build checks confirm the real
-  account Home lookup and hidden picker label in production composition.
-- Mouse automation selected drag rows but did not complete a visible drop. The
-  final implementation uses macOS List itemProvider/ForEach.onInsert plus folder
-  and background drop handlers; their underlying provider/recursive-transfer path
-  passed. Actual mouse dragging, Finder sandbox-extension delivery and dropping
-  onto folder rows still need interactive verification; they are not UI passes.
-- A new cancellation fixture once crashed while its process exited during worker
-  crypto cleanup. Its generated crash stack (symbols only) and debugger run identified
-  exit/cleanup overlap; both new native fixtures now await terminal-worker teardown
-  before process exit. Complete cancellation/drop/regression suites then passed.
-  Routine file cancellation drains/closes the active handle and keeps SFTP/SSH alive.
-- Seventeen core tests, seven SSH, four TLS RDP, five NLA RDP and four protected-probe
-  synthetic checks passed. Final Release build and signatures/platform/dependency/
-  loader/sandboxed-helper verification passed. Formatting, hygiene, shell syntax and
-  diff whitespace checks passed. No real server files, private input, credentials,
-  clipboard contents or user database were read/changed; no commit/publication.
-
-Home access still needs the initial macOS folder approval; no blanket filesystem
-permission was introduced. Cancel can finish its already-submitted 1 MiB upload
-window before closing the handle. Interrupted uploads/trees can leave partial
-files, and genuine network/cleanup failures can still disconnect SSH. Dragging
-server items directly to Finder remains deferred. Production throughput, prolonged
-sessions and actual mouse/Finder drag interoperability remain unverified.
-
-## Maintenance scripts — 9 October 2026
-
-- Eight disposable maintenance checks passed: generated-artifact deletion while
-  retaining tracked fixtures/logs and protected input; generated symlink unlinking
-  without deleting its target; refusal of tracked generated outputs; stable-major
-  tag selection and annotated-tag commit peeling; pin rollback on mocked resolution
-  failure; Keychain-failure preservation; running-app refusal; and successful scoped
-  Library cleanup with mocked platform commands.
-- All three script help/preview entry points passed. The Security.framework deletion
-  helper compiled with a disposable module cache; it was not executed against the
-  user's Keychain. It uses a noninteractive authentication context and never reads
-  credential values.
-- Repository hygiene and diff whitespace checks passed. No actual dependency pins
-  were changed, app data reset, private test input read, live servers contacted,
-  commit created or publication performed. Existing unrelated changes were retained.
-
-Upstream network resolution, a complete real dependency upgrade/build/protocol
-validation cycle, and credential deletion against a real macOS Keychain were not
-exercised. License notices require upstream review when applying an upgrade.
-Permission/authorization failures in a real reset can leave a partial deletion and
-are reported as failures; rerun after resolving access.
-
-## Read-only module-cache cleanup — 9 October 2026
-
-- Confirmed the reported leftover gVisor module directory was owned by the current
-  user with mode 555. Plain recursive deletion could not remove its contents.
-- Project cleanup now restores owner read/write/search permissions on owned
-  generated directories before deletion. It does not chmod files, including
-  hard-linked files, or follow symbolic links outside the generated tree.
-- Ten maintenance checks passed, including new nested read-only Go cache removal
-  and unchanged external symlink-target/hard-linked-file permissions.
-- Reran project cleanup successfully on the actual remaining 4.8 GiB build tree
-  and generated native output. Verified both `.build` and `Vendor/Native` absent.
-  Source fixtures, protected local input and Library/Keychain data were not removed.
-- Repository hygiene and whitespace checks passed. No app/protocol rebuild was
-  needed for this maintenance fix; generated dependencies must be rebuilt for
-  subsequent app development. No commit/publication was performed.
-
-## Dependency selection and preservation correction — 9 October 2026
-
-This supersedes the earlier cleanup scope that removed all of `.build` and
-`Vendor/Native`. Cleanup now retains dependency sources/native build trees,
-installed native libraries/helper, Go module/build caches, Swift package downloads
-and the Python test environment. Only disposable app/compiler/test outputs are
-removed; a substantial `.build` directory after cleanup is expected.
-
-- Verified upstream SwiftTerm tags: newer releases use `v` prefixes while older
-  tags include bare version numbers. The old discovery excluded the prefixed tags
-  and incorrectly selected 1.5.0 from a 1.20.0 starting pin.
-- Tag parsing now accepts bare/v/V tags, compares numeric semantic-version tuples,
-  rejects downgrades and ambiguous tags, and continues peeling annotated tags.
-  Failed package-resolution stdout is retained in the error output.
-- Twelve maintenance checks passed, including actual 1.5/1.9/1.20 ordering,
-  prefixed/annotated tags, automatic and explicit downgrade refusal, and cleanup
-  preservation of every declared dependency location with deletion of test/app outputs.
-- Used the corrected updater to restore SwiftTerm 1.20.0, resolving its original
-  upstream commit and package lock successfully. Other pre-existing update changes
-  were retained. Native library and helper outputs are present.
-- Release build succeeded with the restored pin. Final bundle checks passed macOS
-  27/arm64, six native libraries, signatures, loader and sandboxed WireGuard helper.
-  Repository hygiene and diff whitespace checks passed.
-
-The supplied failure extract contained the failed-command summary without the
-compiler's specific error diagnostic. The successful restored build establishes
-recovery; no additional new-version compatibility or live-server test is claimed.
-The revised cleanup was exercised in disposable trees, leaving the recovered app
-available. Protected test input and user Library/Keychain data were not reset.
-No commit or publication was performed.
-
-
-## Settings version, transfer conflicts and upload refinement — 9 October 2026
-
-- Settings reads the built CFBundleShortVersionString; the verified Release plist
-  contains 1.1.0, matching Version.xcconfig. No separate literal version remains
-  in Settings. The final Release build passed bundle signatures, macOS 27/arm64,
-  six-library dependency closure, pre-UI loader and sandboxed WireGuard helper checks.
-- Sixty-seven synthetic SFTP checks passed. Nineteen conflict checks cover individual
-  upload/download overwrites, nested files and existing folder merges, Overwrite All
-  across batch jobs and reset on the next batch, Stop Transfer retaining completed
-  files and the SSH connection, continued terminal input while waiting, destination
-  link refusal, disconnect clearing the prompt, cancellation during an overwrite
-  preserving the original, unsupported atomic replacement retaining original bytes,
-  and local/remote staging cleanup. Existing no-callback collision/race, shared-login
-  cancellation, recursive actions and drag-provider regression checks also passed.
-- An isolated AppKit/SwiftUI review executable hosted the actual controller and
-  SFTPView against an owned loopback fixture and disposable files. Visually inspected
-  the native dialog and its three buttons; clicked Overwrite, Stop Transfer and
-  Overwrite All. The pane returned to usable state; Stop displayed Cancelled.
-  Independently verified the overwritten remote bytes. Closed the preview and fixture.
-  This preview ran outside App Sandbox and did not load the user database/credentials.
-- A controlled proxy delayed traffic by 10 ms in each direction. Three 16 MiB uploads
-  per variant used varied deterministic binary bytes, separate authenticated fixture
-  sessions and otherwise identical adapter code. Median throughput was 31.010 MiB/s
-  for draining 1 MiB windows, 40.950 MiB/s for draining 4 MiB windows and 50.358 MiB/s
-  for the final refilled 4 MiB window: 62.4% above the 1 MiB baseline. All nine remote
-  files matched the source byte for byte. These are controlled fixture measurements,
-  not production-server throughput. Earlier exploratory samples varied with concurrent
-  builds; the final verification used fresh fixture files after excluding stale data.
-- Seventeen core, seven SSH, four RDP TLS, five RDP NLA and four protected-probe
-  fixture checks passed. The first concurrent TLS/NLA launch contended for their
-  shared fixed port/output directory; the TLS suite passed when rerun sequentially.
-  Pinned native dependency preparation, Swift/Objective-C formatting, repository
-  hygiene, shell syntax and diff whitespace checks passed.
-
-Upload overwrites require the server's posix-rename@openssh.com extension. A refused
-rename reports an error and keeps the original; interrupted connections can retain
-remote staging files. Cancel may finish up to the submitted 4 MiB upload window.
-Regular file conflicts are supported; links and file/folder type mismatches are
-refused. Same-side local copy/move and rename still refuse existing destinations.
-Concurrent remote writers, prolonged/high-latency production sessions and real-server
-throughput remain unverified. No private server input, user clipboard, real remote
-files or saved credentials/database were accessed; no commit or publication occurred.
+# Validation and known limits
+
+Validation is evidence for the stated environment and scope, not a production
+compatibility guarantee. Repeatable commands and fixture ownership are in
+[testing](testing.md); signing requirements are in [packaging](packaging.md).
+
+## Current cleanup, UI and workspace review — 10 October 2026
+
+- README reduced to an introduction, app icon/screenshots, getting started,
+  build commands and links. Detailed workflows/maintenance/testing were retained in
+  focused docs. Dated crash/user-flow files were removed; reusable signing rules and
+  unresolved findings remain in packaging, architecture and this document.
+- README image references now use the five supplied screenshots in `docs/images`.
+  Icon Composer exported the current Default macOS icon as a 512×512 PNG there,
+  displayed at 128×128 in README. The export was visually inspected; image paths,
+  PNG dimensions and the export script's syntax passed checks. Regeneration uses
+  `scripts/export-icon.sh --readme`. This documentation-only update did not change
+  the app icon source or runtime code; app/protocol suites were not repeated.
+- Reusable native source/build, Go, Swift package, Python and RDP sample-server caches
+  moved to `.dependencies`; installed native products remain in `Vendor/Native`.
+  Actual project cleanup removed the old `.build` with accumulated fixture trees,
+  private review apps and logs, preserving dependencies, tracked tests and local input.
+- Pinned native dependencies and the sample RDP server rebuilt at their new paths.
+  Release build passed macOS 27/arm64, six-library closure, signatures, pre-UI loader
+  and the sandboxed embedded-helper startup/listener/cleanup probe. Xcode command-line
+  package resolution uses `.dependencies/swift-packages`.
+- Seventeen core tests passed. Six isolated workspace checks passed bidirectional/
+  adjacent drag ordering, reconnect in-place, background selection, saved edit reload,
+  credential/validation failure preservation, ad hoc restoration exclusion and stale
+  action safety. Credential lookup/preferences were injected; no real credentials,
+  networks or user library were used by these checks.
+- Thirteen maintenance checks passed, including full `.build` deletion with dependency
+  preservation, tracked/redirected target refusal, read-only/link safety, pin rollback,
+  and harness cleanup after success/failure with child-process teardown and no children.
+- Seven SSH and 67 SFTP checks passed: authentication/trust, byte equality, atomic
+  conflicts, recursion/move safety, continued shell operation, cancellation and drop
+  providers. The corrected controlled throughput fixture compares actual 32 KiB and
+  4 MiB upload windows; both variants' bytes matched. At a simulated 20 ms RTT it
+  measured 1.26/37.85 MiB/s (30.1×). This is synthetic, not production throughput.
+- Four TLS RDP, five NLA RDP and four protected-file synthetic checks passed, including
+  trust rejection, frames, cancellation, bad credentials and Unicode clipboard updates/
+  clearing. Mac audio backend and synthetic keyboard/display checks passed.
+- Race-enabled WireGuard Go tests, encrypted RDP accept/reject/clipboard checks,
+  native identity hook, sandboxed shared-lease lifecycle and disposable SwiftData
+  migration/reopening passed. These used generated keys and owned loopback peers.
+
+- Visually reviewed actual tabs, sidebar, file panes and editor in an isolated native
+  preview with in-memory SwiftData, stubbed credentials/transports and owned local
+  files. A near-edge close click removed only its tab; a near-edge primary action
+  saved a synthetic profile. Inspected primary glass buttons, SSH/RDP switching,
+  disclosure activation in the blank middle of the row and scrolling to the final
+  trust control. The editor retained one scroll area/scrollbar. No physical touchscreen
+  or complete VoiceOver workflow was tested; the preview's session pane was stubbed.
+- Final Release rebuild/bundle checks, configured Swift formatting, shell syntax,
+  repository hygiene, local documentation links and whitespace checks passed.
+  All integration run directories were removed on exit; the preview and temporary
+  test logs/tooling were discarded after review.
+No real-server run was performed for this review. The protected local input, user
+clipboard, real remote files, saved profiles/credentials and user database were not
+read or changed. No commit or publication was performed.
+
+## Tab, destination and text refinement — 10 October 2026
+
+- Reduced tab capsules from 52 to 44 points and tab-strip vertical padding from 10
+  to four points; protocol glyphs are 12 points. Close targets remain full-height
+  44×44. Shared button labels use semantic title3 text; current compact background
+  and symbol proportions are described below.
+- Sidebar and overview destinations append `via` plus the selected WireGuard name.
+  Direct connections retain the host alone; missing tunnel references show an
+  unavailable WireGuard connection. Tooltip/accessibility text retains full labels.
+- Removed the descriptive rows below Server address and Port in the shared editor,
+  applying to New, Quick Connect and Edit. Labels/placeholders, protocol defaults,
+  validation and the single scrolling Form remain.
+- Release build and final bundle/platform/signature/loader/sandboxed-helper checks
+  passed. An isolated synthetic preview showed direct, via-profile and missing-profile
+  sidebar labels, compact tabs, larger button text and the simplified SSH/RDP new
+  forms. A near-lower-edge close click removed only its tab. Saved Edit uses the same
+  source form; its menu action could not be completed by UI automation in this pass.
+- Configured Swift formatting, repository hygiene and whitespace checks passed.
+  No protocol behavior, persistence schema or credential handling changed; protocol
+  suites were not repeated. No real servers/private input/user database were accessed.
+  Disposable preview artifacts/logs were removed; no commit or publishing occurred.
+
+## File-only SSH and file-pane headers — 10 October 2026
+
+- SSH terminal-channel, PTY and shell refusal now verifies SFTP on the authenticated
+  transport and selects Files. Shell EOF also retains SFTP when available. Terminal,
+  Split, terminal zoom/search and the observed Find menu action disable when there
+  is no shell. A native segmented control supplies per-segment disabled states;
+  the SwiftUI macOS picker ignored disabled state on individual items.
+- Removed the separate Choose folder action. The plain Local Mac heading opens
+  the existing macOS folder picker with a 44-point target; matching header heights
+  align local/server navigation dividers.
+- Seven SSH and 74 SFTP checks passed, including all four fallback cases,
+  rejection of both services, byte equality, asynchronous overwrite prompts and
+  upload/download cancellation that keeps file-only access. Normal shell exit
+  now checks the terminal-capability callback before the synthetic client disconnects.
+- An isolated native preview used the actual RemoteSession, SSH adapter and file
+  panes with a loopback server, injected owned local files and disposable trust
+  preferences. Starting in Split switched to Files after shell refusal and loaded
+  the listing. Accessibility reported Terminal/Split and terminal tools disabled;
+  a Terminal click retained Files. Local Mac opened the standard folder picker,
+  which was cancelled; visual inspection confirmed plain styling/aligned dividers.
+- Release and final bundle/platform/signature/loader/sandboxed-helper checks,
+  17 core, six workspace and 13 maintenance checks, configured formatting and
+  repository hygiene passed. RDP protocol suites were not repeated for this SSH/UI
+  change. No real servers, private input, Keychain, user clipboard or database were
+  accessed. Physical touch/complete VoiceOver were not tested. Disposable preview
+  processes/files/preferences and test logs were removed; no commit/publication occurred.
+
+## Current button proportions
+
+- Shared secondary actions use 34-point visible backgrounds; icon actions use
+  36-point backgrounds with symbols increased from 16 to 20 points. Transparent
+  margins retain nonoverlapping 44×44-point minimum targets. Semantic title3 labels
+  are laid out directly, removing hidden measuring labels and forced text shrinking.
+- Primary actions retain native prominent glass, semantic semibold text and a
+  32-point label minimum plus native padding. This removes the oversized combination
+  of a 44-point label plus native padding while retaining the primary click target.
+- Reviewed actual shared controls, SFTP panes and Quick Connect in a disposable
+  native preview with in-memory metadata, synthetic callbacks and owned local files.
+  Lower-edge text-button and side-edge icon-button clicks outside the visible
+  backgrounds activated exactly one action. Disabling the actions exposed disabled
+  accessibility states and blocked activation. The editor kept one scroll area/bar;
+  its primary action completed a synthetic connection callback.
+- Release and final bundle/platform/signature/loader/sandboxed-helper checks,
+  configured Swift formatting, repository hygiene, local documentation links and
+  whitespace checks passed. Protocol suites were not repeated for this shared style
+  change. No real connections, private input, Keychain, user clipboard or database
+  were used. Physical touch/complete VoiceOver remain untested. Disposable preview
+  artifacts/preferences/logs were removed; no commit or publication occurred.
+
+## SSH sign-in retry and authorized SFTP probe — 10 October 2026
+
+- Reproduced the original Password implementation's authentication rejection on a
+  synthetic keyboard-interactive-only password server. The worker now negotiates
+  advertised methods after trusted identity verification, supplies a recognized
+  masked password challenge once, and keeps additional/visible prompts interactive.
+  Cancellation, unsupported methods and successful none authentication are explicit.
+- SSH credential rejection now marks the session for **Retry sign-in**. Reconnect
+  requests fresh credentials rather than reloading the rejected saved value. Explicit
+  Interactive retries retain server prompts. Stored credentials are not deleted by
+  retry; replacement saving remains user-controlled.
+- Eighteen SSH, 75 SFTP and nine workspace checks passed. The latter includes the
+  production Workspace/RemoteSession/native adapter: wrong saved password → fresh
+  credential prompt → keyboard-interactive sign-in → file-only SFTP listing. It used
+  synthetic credentials and disposable preferences, without the user's database,
+  Keychain or credential files. Earlier UI checks cover the shared button styling;
+  this pass did not visually automate the new retry label or a real credential dialog.
+- Ten protected-probe synthetic checks passed: SSH/RDP success, selected SFTP access,
+  supplied-pin match/mismatch, invalid IDs, missing/non-SSH selections and file-only
+  capability after shell refusal/EOF. Empty optional arguments work with macOS's
+  bundled Bash. Probe output is restricted to ordinal/protocol and fixed descriptions.
+- The explicitly authorized supplied SFTP account authenticated and returned a
+  directory listing under Password both before and after this change, with the
+  independently supplied public host key. This did not reproduce the reported -18
+  rejection; a differing saved username/password remains unconfirmed because user
+  profiles/credential stores were not inspected. The real probe sent no shell commands,
+  read no file contents, transferred no files and changed no remote data. File-only
+  capability was established on synthetic servers; the real probe did not observe
+  shell refusal/EOF during its short no-input window.
+- Protected JSON bytes and 700/600 directory/file permissions remained unchanged.
+  Release/final bundle/platform/signature/loader/sandboxed-helper checks, 17 core,
+  13 maintenance checks, formatting and repository hygiene passed. RDP/NLA suites
+  were not repeated beyond the protected-probe RDP check. Test processes/directories,
+  logs and temporary probe records were removed; no commit or publication occurred.
+
+## Retained evidence
+
+Earlier isolated UI runs exercised the native workspace/editor, private-key/trust
+prompts, single-scroller disclosure layout, file browser/actions and overwrite dialogs.
+Synthetic sources cover core persistence, credential encoding/local permissions, endpoint
+trust, import filtering/idempotence, prompt single-resolution/cancellation, saved display/
+audio choices, and pre-feature SwiftData migration. The layered Icon Composer icon and
+sidebar glyph were inspected at multiple sizes/appearances. Prior local DMG creation
+passed checksum and mounted final-bundle verification; DMG generation was not repeated
+for this review. See [branding](branding.md) and [development](development.md).
+
+An explicitly authorized earlier UI run authenticated the two supplied SSH/RDP servers
+and exercised saved/edit/relaunch flows, mixed sessions, SSH ANSI/UTF-8 output/search,
+RDP Metal frames/mouse/ASCII input/Ctrl–Alt–Delete, reconnect and full screen. It used
+isolated data; later session checks used the production local credential implementation
+after a development Keychain stall. The protected JSON retained its hash/permissions;
+disposable profiles/local credentials were removed, while Keychain absence was not
+independently established. This proves those bounded flows on those servers only.
+Unicode/IME keyboard and real clipboard/audio were not established by that run.
+
+## Open findings and production checks
+
+- **Keychain UI stalls:** synchronous credential operations can block UI callers when
+  a rebuilt ad-hoc app requires macOS authorization. The fallback cannot help while a
+  Keychain call is still waiting. Worker-based I/O, prompt/cancellation behavior and a
+  stable distribution identity need separate implementation/testing. Workspace lookup
+  failure now preserves the old session, but this does not resolve a blocking call.
+- **RDP resizing:** the supplied server had no display-control channel, so dynamic
+  resizing could not apply. Software bitmap negotiation delivered visible frames;
+  verify capability reporting, resolution negotiation, Retina coordinates/cursor shapes
+  and behavior on Windows/xrdp/server policies. Match-window mode fixes its initial size.
+- **Input/sharing:** real clipboard both directions, audible remote sound, additional
+  keyboard layouts and Unicode/IME need verification. Synthetic clipboard exchange,
+  keyboard events and silent local audio initialization are narrower evidence.
+- **SSH/SFTP:** broad real-server algorithms/key formats, full-screen terminal programs,
+  long/high-latency transfers, subsystem policies, large trees, concurrent writers,
+  unusual filesystems and interruption during deletion need testing. Atomic upload
+  overwrite requires OpenSSH POSIX rename; sources must remain quiescent for moves.
+  Partial/completed destinations can remain after cancellation/failure.
+- **Drag/file access:** provider/controller tests do not establish actual mouse/Finder
+  dragging, sandbox-extension delivery, remote file promises, external-editor access,
+  Trash or cross-volume behavior. Home needs explicit permission; server Open is a
+  temporary local snapshot without automatic upload.
+- **WireGuard:** production peers, internal/IPv6 DNS, endpoint roaming, network changes,
+  long sessions and performance remain unverified. The signed-parent helper probe
+  closes the sandbox-startup gap, not real peer interoperability.
+- **UI/accessibility:** complete VoiceOver/keyboard-only workflows, larger text/display
+  settings and actual touch hardware require review. A 44-point custom-control baseline
+  does not establish touch-platform support.
+- **Release:** Developer ID/hardened-runtime signing, notarization, clean-Mac installation,
+  vulnerability/legal review, third-party notices after upgrades and the app source
+  license remain pending. The development credential fallback is unencrypted and disclosed.
+
+Concurrent mixed sessions, suspend/resume, changed networks, failed DNS and repeated
+reconnect/disconnect under memory/thread diagnostics also need broader coverage.
+Disabled protected entries yield SKIP, never a real-server pass.

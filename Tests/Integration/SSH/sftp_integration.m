@@ -6,6 +6,9 @@ int main(int argc, char **argv) {
         if (argc != 5)
             return 2;
         NSString *mode = @(argv[1]);
+        BOOL filesOnly =
+            [@[ @"no-pty", @"no-shell", @"channel-denied", @"shell-eof", @"keyboard-no-shell" ] containsObject:mode];
+        BOOL noServices = [mode isEqual:@"no-services"];
         NSInteger port = atoi(argv[2]);
         NSString *root = @(argv[3]);
         NSString *pin = [NSString stringWithContentsOfFile:@(argv[4]) encoding:NSUTF8StringEncoding error:nil];
@@ -22,7 +25,9 @@ int main(int argc, char **argv) {
         __weak URSSHClient *weak = client;
         dispatch_semaphore_t done = dispatch_semaphore_create(0);
         __block BOOL passed = NO, input = NO, resized = NO, cancelling = NO;
+        __block BOOL terminalUnavailable = NO, connected = NO, listed = NO;
         __block int auth = 0, trusts = 0, phase = 0;
+        __block int conflicts = 0;
         __block unsigned long long lastBytes = 0;
         NSMutableString *terminal = [NSMutableString new];
         client.onTrust = ^BOOL(NSString *fingerprint, NSString *details) {
@@ -40,10 +45,30 @@ int main(int argc, char **argv) {
           if ([mode isEqual:@"no-sftp"] && input && resized)
               [weak disconnect];
         };
+        client.onTerminalAvailability = ^(BOOL available) {
+          terminalUnavailable = !available;
+        };
+        if (filesOnly) {
+            client.onFileConflict = ^(NSString *token, NSString *name) {
+              conflicts++;
+              // Exercise the worker wait without a shell; UI responses arrive asynchronously.
+              dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
+                             dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+                               [weak resolveFileConflict:token overwrite:YES];
+                             });
+            };
+        }
         client.onStatus = ^(NSString *status, NSString *message) {
-          if ([status isEqual:@"connected"])
+          if ([status isEqual:@"connected"]) {
+              connected = YES;
+              if (listed || (filesOnly && !terminalUnavailable))
+                  return;
+              listed = YES;
               [weak listDirectory:@"." requestID:@"list"];
+          }
           if ([status isEqual:@"failed"] || [status isEqual:@"disconnected"]) {
+              if (noServices)
+                  passed = [status isEqual:@"failed"] && !connected && !listed;
               if ([mode isEqual:@"cancel"])
                   passed = cancelling && ![[NSFileManager defaultManager] fileExistsAtPath:download];
               dispatch_semaphore_signal(done);
@@ -150,10 +175,32 @@ int main(int argc, char **argv) {
               phase++;
               lastBytes = 0;
               [weak transferLocalPath:download remotePath:@"/uploaded 世界.bin" upload:NO requestID:@"download"];
+          } else if (filesOnly && phase == 2) {
+              if (error || ![[NSData dataWithContentsOfFile:download] isEqual:source]) {
+                  [weak disconnect];
+                  return;
+              }
+              phase++;
+              lastBytes = 0;
+              [weak transferLocalPath:local remotePath:@"/uploaded 世界.bin" upload:YES requestID:@"overwrite"];
+          } else if (filesOnly && phase == 3) {
+              if (error || [result[@"bytes"] unsignedLongLongValue] != source.length) {
+                  [weak disconnect];
+                  return;
+              }
+              phase++;
+              lastBytes = 0;
+              [weak transferLocalPath:download
+                           remotePath:@"/uploaded 世界.bin"
+                               upload:NO
+                            requestID:@"replace-download"];
           } else {
-              passed = error == nil && [[NSData dataWithContentsOfFile:download] isEqual:source] && input && resized;
+              passed = error == nil && [[NSData dataWithContentsOfFile:download] isEqual:source] &&
+                       (filesOnly ? terminalUnavailable && !input && !resized && conflicts == 2 : input && resized);
               if ([mode isEqual:@"interactive"])
                   passed = passed && auth == 2;
+              if ([mode isEqual:@"keyboard-no-shell"])
+                  passed = passed && auth == 0;
               [weak disconnect];
           }
         };

@@ -1,9 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-mkdir -p .build
-fixture_root="$(mktemp -d "$PWD/.build/wireguard-migration.XXXXXX")"
-trap 'rm -rf "$fixture_root"' EXIT
+source scripts/test-support.sh wireguard-migration
 python3 - "$fixture_root" <<'PY'
 from pathlib import Path
 import sys

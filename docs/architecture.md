@@ -1,350 +1,243 @@
-# Architecture and implementation decisions
+# Architecture
 
 ## Platform and dependencies
 
-Universal Remote targets macOS 27+ on Apple silicon only. Xcode's project deployment target is 27.0 and architecture arm64. Package.swift has the same deployment floor; native builds explicitly use arm64/macOS 27 and write a platform stamp. Build.sh rebuilds missing/outdated native dependencies. No compatibility shims, Intel binaries or universal bundle are required.
-
-SwiftUI supplies the workspace, editor, prompts, settings and sidebar. SwiftData stores metadata/folders; Security.framework supplies Keychain storage and RDP certificate chain/hostname evaluation. libssh2 supplies the SSH protocol; SwiftTerm supplies terminal emulation. FreeRDP/WinPR supplies RDP/NLA/channels and GDI pixels. OpenSSL supplies native cryptography; Metal displays BGRA frames. Exact pinned versions/commits are in scripts/prepare-dependencies.sh and ThirdParty/README.md. There are no runtime Homebrew or external client dependencies.
+Universal Remote is a native SwiftUI app for macOS 27+ and arm64 only. Xcode,
+Package.swift and native builds share that minimum. SwiftData stores metadata;
+Security.framework provides Keychain and certificate trust. SwiftTerm handles
+terminal emulation, libssh2 SSH/SFTP, FreeRDP/WinPR RDP/NLA/channels, OpenSSL native
+cryptography, Metal desktop frames, and wireguard-go/gVisor private RDP transport.
+Pins, checksums and licenses live in the build scripts, Go manifests and ThirdParty.
+No runtime Homebrew, external protocol client or SSH agent is required.
 
 ## Source map
 
 | Folder | Responsibility |
-|---|---|
-| UniversalRemote/App | Scene composition and application lifecycle |
-| UniversalRemote/Domain | Nonsecret drafts, protocol/auth types, session state |
-| UniversalRemote/Persistence | SwiftData entities and metadata import |
-| UniversalRemote/Shared/Security | Credential stores and trusted identities |
-| UniversalRemote/Shared/Prompting | Main-thread presentation / worker-thread responses |
-| UniversalRemote/Shared/Testing | Bounded, redacted local test-document decoding |
-| UniversalRemote/Features/Workspace | Sidebar, overview, tab selection, workspace coordination |
-| UniversalRemote/Features/Connections | Profile editor, explicit key picker, test import preview |
-| UniversalRemote/Features/Sessions | Session lifecycle, prompts, panes, tabs and diagnostics |
-| UniversalRemote/Features/Settings | Appearance and tab restoration preferences |
-| UniversalRemote/Protocols/SSH | Persistent terminal view and delegate |
-| UniversalRemote/Protocols/RDP | Metal desktop view, input and latest-frame mailbox |
-| UniversalRemote/Native/SSH | Independently written libssh2 adapter |
-| UniversalRemote/Native/RDP | Independently written FreeRDP adapter |
-| Tests/CoreTests | Domain, persistence, credential coding, trust, import and prompts |
-| Tests/Integration | Synthetic SSH/RDP harnesses and redacted real-server probe |
-| Tests/Fixtures | Blank, disabled test-server schema example |
-| scripts | Reproducible builds, packaging and tests |
+| --- | --- |
+| App | Scene composition and lifecycle |
+| Domain | Drafts, protocols, authentication, display choices, session state |
+| Persistence | SwiftData models and metadata import |
+| Shared/Security | Credential stores and endpoint trust |
+| Shared/Prompting | UI presentation and worker responses |
+| Shared/Testing | Bounded, redacted test-document decoding |
+| Features/Workspace | Sidebar, overview, tabs, coordination and shared controls |
+| Features/Connections | Profile editor, explicit key picker, import preview |
+| Features/Sessions | Lifecycle, prompts, panes, diagnostics and SFTP controller |
+| Features/Settings | Appearance and tab restoration |
+| Features/WireGuard | Profile library, transport leases and packaged helper probe |
+| Protocols/SSH | Persistent terminal view/delegate |
+| Protocols/RDP | Metal view, scrolling, input and latest-frame mailbox |
+| Native/SSH, Native/RDP | Independently written Objective-C protocol adapters |
+| Networking/WireGuard | Independently written Go helper using pinned upstream modules |
+| Tests/CoreTests, Integration, Maintenance | Core, protocol/UI coordination and disposable script checks |
+| Tests/Fixtures | Blank disabled server-document example required by setup/import |
 
-Xcode's synchronized source group discovers app files automatically. Package.swift compiles only Domain/Persistence/Shared to test core behavior independently of native rendering. SwiftData entity/property names are unchanged by the folder reorganization, so existing saved data stays usable.
+App source folders are under UniversalRemote. Xcode's synchronized group includes
+files there automatically; keep test-only tools/secrets outside it. Package.swift
+builds only Domain/Persistence/Shared. Preserve existing SwiftData entity/property
+identities and module/storage names; never reset the user's database during refactoring.
 
-## Ownership and threading
+## Session ownership and cancellation
 
-Workspace is main-actor observable state and owns live RemoteSession objects. Each session snapshots a ConnectionDraft, owns protocol-specific persistent surfaces and native client, and uses a generation ID to ignore callbacks from an earlier attempt. SwiftUI pane re-creation does not reconnect the transport. Closing a tab disconnects it; selection releases pressed input and restricts RDP clipboard sharing to the selected session.
+Workspace is main-actor observable state and owns RemoteSession objects. A session
+snapshots its ConnectionDraft and owns persistent native clients/surfaces. SwiftUI
+pane recreation never reconnects. Generation IDs reject callbacks from earlier attempts.
+Closing disconnects; selection releases pressed desktop input and limits clipboard
+sharing to the selected RDP session. Reconnect reloads saved metadata, resolves
+credential/validation failures before replacing the old session, and replaces the tab
+at its existing index. Background reconnect retains the selected tab. Ad hoc/deleted
+profiles retain their snapshot. Only persistent tabs enter restoration preferences;
+restored tabs remain disconnected. Dragging inserts a tab before its destination.
 
-Each native worker owns its handles; queued input is bounded. SSH performs socket/handshake/host-key validation before authentication, requests a PTY and shell, and delivers output with main-thread backpressure. SFTP opens on demand on the same authenticated session; no local shell/agent is started. RDP snapshots GDI pixels into a latest-frame mailbox: rendering discards superseded frames instead of accumulating an unbounded queue. Metal draws a fitted desktop; pointer coordinates account for fitted bounds.
+Each native worker owns its handles and bounded input/work queues. SSH sends output
+with main-thread backpressure. RDP uses a latest-frame mailbox, dropping superseded
+frames instead of building an unbounded UI queue. Trust/interactive callbacks wait on
+single-use PromptWaiter responses while the main actor presents sheets. Cancellation
+resolves pending prompts, interrupts transport work, invalidates callbacks and stops
+clipboard timers. Never wait for workers/prompts on the main actor.
 
-Native trust/interactive callbacks wait on PromptWaiter while the main actor presents a sheet. Resolution is single-use and cancellation/timeout unblocks workers. Disconnect resolves pending prompts, interrupts the transport, stops clipboard timers and invalidates callbacks. Never block the main actor waiting for a native worker or a prompt.
+CredentialStore currently exposes synchronous Keychain operations used by UI callers.
+Development signing changes can trigger authorization stalls; worker-based credential
+I/O with explicit prompt/cancellation policy remains an open improvement. Injected
+credential lookup and preferences let workspace tests avoid real Keychain/user defaults.
 
 ## Storage and trust
 
-SavedConnection and ConnectionFolder contain only metadata. CredentialStore stores password/key bytes/passphrase by connection UUID in device-only Keychain items. If Keychain is unavailable (entitlement, authentication/interaction or service availability errors), it uses LocalCredentialStore under ~/Library/Application Support/UniversalRemote/Credentials. The UI explicitly explains that this fallback is not encrypted. Its directory is 700, files are 600, and writes use an owner-only temporary file plus atomic rename. Existing local records remain authoritative, preventing an older Keychain value from superseding an edited local credential. Quick Connect never writes credentials. This user-authorized development fallback is not a distribution security claim. Session-only Quick Connect does not create a profile or restore on launch. Restored saved-profile tabs stay disconnected. Duplicate profiles get new IDs and do not duplicate credentials.
+SavedConnection/ConnectionFolder/SavedWireGuard contain metadata, not secrets. Optional
+wireGuardID and rdpDisplayMode preserve existing schema identities; absent/unknown
+modes use Fit. audioPlayback defaults true for older profiles. Credential coding retains
+compatibility when adding optional tunnel fields. Device-only Keychain stores secrets by
+UUID. When unavailable, owner-only unencrypted files under Library/Application Support/
+UniversalRemote/Credentials provide the disclosed development fallback (directory 700,
+files 600, atomic writes). Existing local records remain authoritative. Quick Connect
+never saves secrets/profiles; duplication does not copy credentials; profile deletion
+removes its credential item. No automatic Keychain export is used.
 
-Trust exceptions are scoped by protocol/host/port, stored separately in UserDefaults, and compared against the actual fingerprint. Changed identities require explicit approval. RDP's custom X509 callback uses macOS certificate trust and hostname checks before offering an exception. TLS and NLA are enabled; plaintext legacy RDP is disabled. No accept-all certificate switch is used.
+Trust preferences are separate and scoped to protocol/host/port. SSH verifies a host
+key before authentication; RDP evaluates certificate chain and original hostname with
+Security.framework. Unknown/changed identities require explicit approval. TLS/NLA stay
+on, plaintext legacy RDP and accept-all trust stay off.
 
-TestServerDocument is temporary secret-bearing input. Parsing is bounded and errors never include its contents. TestServerImporter saves only new metadata in a Test Servers folder; existing IDs are untouched. The UI offers separate credential storage on this Mac, leaves default trust intact, and does not connect automatically. The ignored source file can be removed after import; deletion does not remove saved credentials or metadata.
+Test documents are bounded temporary secret-bearing input with redacted errors.
+Import creates new metadata in Test Servers, skips existing UUIDs, offers separate
+credential saving, and never connects or trusts imported fingerprints automatically.
+See [local testing](local-testing.md) for protected-input rules.
 
-## Packaging
+## UI and desktop presentation
 
-The packaging phase recursively copies the native library closure into Contents/Frameworks, rewrites dependency paths, signs libraries with the same identity, and includes license notices. Local builds use ad-hoc signing and disabled hardened runtime. build.sh recreates only the generated Release app before each build: the always-running library packaging phase replaces sealed resources, so an incremental build must not reuse a bundle whose final signing can be skipped. Compiler and native dependency caches remain intact. Distribution requires a real Developer ID identity plus hardened runtime and notarization. The packaging phase refuses ad-hoc + hardened runtime; verify-bundle.py checks platform, arm64-only slices, dependency closure, signatures/teams and runs a pre-UI loader probe. See the crash incident document.
+The grouped connection Form is the editor's only scrolling owner, with fixed header
+and actions. It omits organization/notes controls in all modes while preserving existing
+data. Full-width disclosure rows announce their state. Server address and port are
+separate; validation rejects combined host:port while preserving IPv6. Tabs use capsule
+Liquid Glass, with a 44-point capsule and full-height close target; the strip adds
+only four points above/below. Shared secondary actions use 34-point visible
+backgrounds and icon actions use 36-point backgrounds with 20-point symbols;
+transparent margins retain 44-point hit regions. Primary actions retain native
+glass styling with compact semantic labels instead of a 44-point label plus
+native padding. Sidebar RDP hosts append the selected
+WireGuard profile name from the live metadata query; missing references explicitly
+show an unavailable tunnel. Long destination labels expose the full text in a tooltip. See [UI guidelines](ui-guidelines.md).
 
-Version.xcconfig is the sole version/build source, referenced by both Xcode target configurations. DMG packaging reads the built Info.plist rather than maintaining a separate release-version value. scripts/build-dmg.sh stages only the verified app and an Applications symlink, verifies the mounted read-only image, and emits a version/build-named DMG plus SHA256 checksum under ignored .build/releases. Temporary staging/mounts are cleaned on exit; failed detach leaves the staging directory intact to avoid deleting a mounted volume. This local workflow performs no Git or publishing operation and does not claim notarization.
+RDP negotiates software bitmap rendering: enabling the graphics pipeline authenticated
+but delivered no visible paint callbacks on a supplied server. This is a bounded
+interoperability workaround, not a diagnosis for every server. Metal/BGRA/latest-frame
+ownership stays intact. Fit scales the desktop and optionally requests server resize;
+100% maps one remote pixel to one Mac point; Match window waits for a laid-out viewport
+and fixes that initial size (200–8192) until reconnect. Delivered server dimensions
+remain authoritative. Fixed modes disable resize requests. Native NSScrollView clips
+and pans, with pointer coordinates derived from the same render rectangle. Scrollbars
+and Option-scroll pan locally; ordinary scrolling reaches Windows.
 
-## Deliberately deferred
+The worker retains clipboard updates before channel attachment and advertises after
+MonitorReady. The selected session synchronizes before paste and on its timer.
+Command+C/X/V/A map to Windows Control shortcuts after releasing forwarded Command;
+app shortcuts remain local. Text sharing is opt-in. FreeRDP's Mac audio backend is
+bundled, playback defaults on, and microphone capture stays off. Changes apply after
+reconnect; real-server clipboard/audio policies still need broader verification.
 
-SCP/WebDAV; SFTP resume/Finder download promises; SSH config/agent/jump hosts/forwarding/certificates/hardware keys; RDP Gateway/RemoteApp/microphone capture/devices/drive redirection/multiple monitors/hardware video; nested folders/cloud sync/updater. The source license is undecided. Production interoperability and distribution are not claimed by synthetic fixture passes.
+## Shared SSH and SFTP
 
-## Connection editor and desktop negotiation — 8 October 2026
+After host-key verification, the SSH worker queries the server's allowed sign-in
+methods with bounded nonblocking retries. Password prefers SSH password and can
+fall back once to advertised keyboard-interactive. It supplies the selected password
+once to a recognized masked password prompt; codes, visible/unrecognized prompts
+and all explicit Interactive prompts use the existing cancellable UI coordinator.
+Cancelling a challenge disconnects; the temporary password reference clears after
+sign-in and on every cleanup path. Private-key selection never falls back to another
+credential type. A NULL method list is accepted only when libssh2 confirms successful
+none authentication. See [libssh2 authentication](https://libssh2.org/libssh2_userauth_list.html).
 
-The editor keeps protocol, name, host/port, username/domain, authentication and credentials in one form. Appearance and trust settings use inline disclosure groups. The macOS grouped Form owns scrolling directly within the fixed-height editor body; wrapping it in another ScrollView creates competing scroll layouts when disclosures change height. The connection editor omits organization and notes in all modes, including editing saved connections. Session tabs use SwiftUI GlassEffectContainer and interactive capsule glass, with a tinted selected tab; primary editor actions use the native glass button style. Session ownership, reordering and disconnect semantics are unchanged.
+Credential rejection has a worker callback guarded by the session generation.
+Reconnect then replaces the tab in place and requests fresh credentials, bypassing
+the saved lookup for that retry. Explicit Interactive retries ask the server again
+without a separate password dialog. Stored credentials are changed only through the
+existing user-controlled saving flow; transport/identity failures retain normal
+reconnect behavior. No persistent model identity changes are involved.
 
-The supplied real RDP server authenticated with graphics-pipeline support enabled but delivered no paint callbacks/visible frames. Disabling SupportGraphicsPipeline delivered visible desktop pixels. Phase 1 therefore negotiates standard software bitmap rendering (RemoteFX/NSCodec remain available), retaining independent dynamic display control. This is a verified workaround for that server, not a complete diagnosis of its GFX interoperability or a claim about all servers. The Metal renderer and latest-frame buffering are unchanged.
+A session owns one SSH login and an SFTPController. Terminal/Files/Split only changes
+presentation; SFTP opens lazily on the existing libssh2 session. Terminal channel,
+PTY or shell refusal closes only that channel, then verifies SFTP on the same
+authenticated transport before reporting a file-only connection. Shell EOF also
+checks SFTP rather than ending usable file access. Transport errors, authentication
+and trust failures still fail the connection; neither service available is an error.
+Worker capability callbacks use the session's generation guard, select Files and
+disable Terminal/Split and terminal tools. Reconnect checks capabilities anew.
+Subsystem refusal with a usable shell leaves the terminal available. The worker
+services terminal I/O/resize between file
+chunks and socket waits. Callbacks check generation and operation IDs. Listings are
+bounded to 20,000 UTF-8 entries; trees to 20,000 items/64 levels. Symlinks/special files
+are displayed but refused by recursive preflight. Directory/list/handle/no-progress
+waits are bounded. Genuine transport/cleanup failure can disconnect shared SSH.
+Without a shell, file waits skip terminal pumping; idle extended-stream reads on
+the SFTP channel drain SSH control/keepalive packets and detect transport closure.
+Standard-stream bytes remain exclusively owned by SFTP. See
+[libssh2 channel streams](https://libssh2.org/libssh2_channel_read_ex.html).
+The session accepts an injected file controller for isolated UI/transport checks.
 
-## Form interaction, clipboard and playback — 8 October 2026
+Home comes from getpwuid, since NSHomeDirectory names the sandbox container. Explicit
+NSOpenPanel read/write permission gates access; a Home security-scoped bookmark is
+remembered/refreshed, while other folder scopes stay session-owned. The plain Local
+Mac heading opens the same folder picker with a 44-point hit region; both file-pane
+headings and navigation rows use matching minimum heights. Local operations run on
+workers with O_NOFOLLOW, cancellation and retained scopes. No broad filesystem
+entitlement is used. Multi-selection jobs run sequentially and stop on the first error.
+File buffers capture session-local paths/scopes; Paste never reads system clipboard.
+Copy Path alone writes requested paths. Disconnect clears buffers and late drop callbacks.
 
-Disclosure headers use a full-width button with an expanded/collapsed accessibility value. Server address and port have separate labelled rows and protocol-specific default-port guidance. Validation rejects a host combined with a port while retaining IPv6 support.
+Regular-file transfer conflicts ask Stop/Overwrite/Overwrite All; the last is scoped to
+one batch. Real folders merge; links/type mismatches fail. Downloads fsync sibling
+staging then atomically publish; exclusive new files use hard links. Overwrite uploads
+stage exclusively then use posix-rename@openssh.com; unsupported servers preserve the
+original and fail, with no truncate/delete fallback. Same-side local copy/move and
+rename retain no-overwrite behavior. Cancellation attempts staging cleanup; interruption
+can leave uploaded partial files, completed tree leaves or remote staging.
 
-The RDP worker retains local clipboard updates even before channel attachment and advertises them only after MonitorReady. It advertises text only once a local value exists. The selected session synchronizes pending clipboard changes before paste input as well as on its timer. Command+C/X/V/A translate to Windows Control shortcuts, releasing any previously forwarded Command modifier first. Clipboard sharing remains opt-in and text-only. Reconnecting a saved session reloads its current profile from the workspace model context so edited sharing settings take effect; ad hoc or deleted profiles retain their session snapshot. A failed metadata fetch leaves the existing session open and reports the error.
+Uploads use a refilled bounded 4 MiB window (refill after at least 256 KiB acknowledged);
+downloads use 256 KiB. EAGAIN retries preserve unacknowledged bytes/buffer lengths under
+[libssh2's write-ahead contract](https://libssh2.org/libssh2_sftp_write.html). TCP_NODELAY
+and captured SFTP readiness directions avoid terminal pumping changing pending wait
+requirements. Cancel stops refilling, drains submitted work and closes its handle,
+retaining the authenticated terminal and idle SFTP channel. It can finish the current
+4 MiB window. Terminal pumping/backpressure and throttled progress stay intact.
 
-FreeRDP's pinned Mac audio backend is now built and bundled. The saved audioPlayback Boolean defaults to true, including automatic migration of older profiles; existing entity/property identities stay intact. The adapter requests remote playback and disables microphone capture. FreeRDP owns audio output and its connection lifecycle. No external player is launched. The native feature stamp now includes audio1 so existing checkouts rebuild the previously audio-disabled libraries.
+Moves copy then recheck metadata before deleting sources; same-side moves prefer
+exclusive rename. Metadata checks require quiescent sources and cannot guarantee a
+transactional snapshot or detect every concurrent same-size change. Server-to-server
+copies stream through temporary local trees. Completed work remains after later failure.
+Remote Delete is confirmed/permanent; local deletion uses Trash. Remote Open downloads
+a temporary snapshot for a local application with no automatic upload; the OS owns its
+later cleanup. Local publication needs filesystem hard-link support.
 
+List itemProvider/onInsert plus folder/background drop handlers support internal
+session tokens and Finder file URLs with retained scopes/provider lifetime. Text is
+never treated as paths. Drops copy and reuse recursive/conflict rules. Finder download
+promises and actual production drag/sandbox interoperability remain deferred/unverified.
 
-## Embedded WireGuard for RDP — 9 October 2026
+## Embedded WireGuard
 
-SavedWireGuard is a new metadata-only SwiftData entity. SavedConnection gains an
-optional wireGuardID; all existing entity/property identities remain unchanged.
-The existing CredentialStore gains optional WireGuard key fields, preserving old
-credential decoding and its disclosed development fallback. The profile library
-supports manual configuration and bounded, single-peer .conf import. Deletion
-retains dangling RDP IDs deliberately so it cannot silently enable direct RDP.
+Saved profiles hold bounded single-peer metadata; keys use existing credential storage.
+Dangling RDP profile references fail closed instead of silently connecting directly.
+One userspace helper/device per profile serves token-authenticated loopback TCP leases,
+each restricted to its destination/AllowedIPs. Requests/keys use anonymous pipes;
+diagnostics use allowlisted codes, never upstream config/keys/hosts. Blocking pipe work
+runs off the main actor. Leases stop independently; the last closes the helper. Parent
+EOF/signals close devices/listeners. Startup/dial/auth waits are bounded; edited profiles
+require all leases to disconnect before new settings apply.
 
-Networking/WireGuard builds a bundled Go helper from checksum-pinned wireguard-go
-and its compatible gVisor netstack. The app-provided reference checkouts are
-read-only; the independently written glue uses upstream libraries, not copied
-protocol adapters. No system TUN/VPN/routes/DNS or administrator access is used.
-One device/helper per saved profile avoids competing endpoints for simultaneous
-RDP tabs. Each tab leases a token-authenticated, loopback-only ephemeral TCP
-listener restricted to its chosen destination and peer AllowedIPs. Requests/keys
-travel over an anonymous pipe; diagnostics suppress config/keys/hostnames.
+FreeRDP TCPConnect changes dialing only. Original host/port remain in TLS/NLA/trust;
+endpoint redirects fail closed and multitransport is disabled. RDP destination IPs must
+be within AllowedIPs. Configured DNS covered by those routes uses gVisor/WireGuard;
+uncovered DNS uses ordinary UDP/TCP scoped to DNS only, with bounded A/AAAA queries
+and TCP fallback. Literal destinations need no DNS. Resolving public addresses never
+permits direct RDP fallback. No system VPN/TUN/routes/DNS/admin changes occur.
+See [WireGuard](wireguard.md) and [packaging](packaging.md) for lifecycle/sandbox rules.
 
-The pinned FreeRDP 3.32.1 TCPConnect hook changes socket dialing only. Settings
-retain the original ServerHostname/ServerPort for TLS, Security.framework hostname
-validation, NLA and existing trust scoping. Endpoint redirection fails closed;
-multitransport is explicitly disabled. Rendering, audio, clipboard and main-actor
-prompt handling remain intact. The profile registry performs blocking pipe work
-on workers; cancellation tears down individual leases, and the final lease closes
-the helper. Parent EOF/signals close all devices/listeners. Startup, remote dialing
-and socket authentication have bounded waits. Active edited profiles require all
-users to disconnect before new settings/keys are applied. See docs/wireguard.md.
+## Build and maintenance
 
+`.dependencies` retains native source/build trees, Go caches, Xcode package downloads,
+test Python and the reproducible RDP sample server. `Vendor/Native` holds installed
+headers/libraries/helper. `.build` is entirely disposable. Test runs under `.build/tests`
+are unique, owner-only and removed on exit with their processes/logs/data. Keep source
+fixtures that exercise distinct regressions; discard one-off generated review artifacts.
 
-## Split-tunnel DNS and startup diagnostics — 9 October 2026
+The updater compares numeric stable bare/v/V tags, refuses downgrades, pins exact
+native/Swift/Go revisions, rolls back manifests on resolution failure and invalidates
+outdated native/sample-server products. Successfully resolved pins remain after a build
+failure; upstream notice changes still need review. Project cleanup preserves dependencies
+and protected input, rejects tracked/redirected generated targets and never follows
+external links. User-data reset is a separate explicit destructive action scoped to
+current-bundle Library/preferences/credential service, using SecItemDelete without
+reading secrets; it refuses a running app/helper, sudo and redirected paths.
 
-An exported working split-tunnel configuration exposed an overly strict helper
-startup check: DNS servers outside peer AllowedIPs were rejected even when RDP
-used a literal IP address. That rejection occurred before device creation. DNS
-is now routed per explicitly configured server: covered addresses use gVisor/
-WireGuard; uncovered addresses use ordinary UDP/TCP sockets, scoped to DNS only.
-Go's resolver performs A/AAAA queries with bounded per-server waits and TCP
-fallback; it never changes system DNS configuration. Literal addresses need no
-DNS. The final RDP addresses remain restricted to AllowedIPs and always use
-WireGuard; resolving a public address cannot enable direct RDP fallback.
+Packaging relocates the native closure and ships notices. Local ad-hoc builds disable
+hardened runtime and recreate the generated app before final signing. Distribution
+requires Developer ID/hardened runtime/notarization. Version.xcconfig is the single
+version source; DMGs use built metadata. Final bundle/loader/sandboxed-helper checks
+are required. See [development](development.md), [packaging](packaging.md) and
+[testing](testing.md) for procedures.
 
-The helper sends allowlisted startup error codes rather than a generic Boolean.
-Swift preserves stage-specific errors without exposing upstream errors/config.
-The authenticated bridge reports fixed DNS/destination failure status bytes before
-RDP negotiation; the native adapter converts them to actionable, redacted messages.
-Unexpected shared-device failures retain cancellation/generation safeguards.
-
-
-## Sandboxed helper packaging — 9 October 2026
-
-The app uses App Sandbox. An unsandboxed test parent had hidden two missing
-packaging requirements: the embedded command-line helper needs exactly
-com.apple.security.app-sandbox and com.apple.security.inherit, and its parent
-needs both network.client and network.server for the WireGuard UDP socket and
-loopback TCP listener. Configuration/WireGuardHelper.entitlements supplies the
-child's two inheritance keys during nested signing; both Xcode configurations
-supply incoming/outgoing network permissions. App Sandbox remains enabled. The
-helper still binds the bridge only to loopback and restricts each token to its
-selected destination. No VPN/TUN/system route or filesystem permissions were added.
-
-verify-bundle.py checks the exact child entitlements and parent network rights,
-then launches --verify-wireguard-helper from the signed final app. This pre-UI
-probe uses synthetic keys and an owned loopback UDP endpoint, starts the actual
-WireGuardTransport, checks its listener, and verifies cleanup. It never opens
-SwiftData/Keychain, saved profiles or private config files. The existing loader
-check remains separate. The lifecycle test parent is now also sandboxed and its
-child signed for inheritance, matching the app instead of a command-line-only
-execution environment.
-
-Apple references: [sandbox inheritance](https://developer.apple.com/library/archive/documentation/Miscellaneous/Reference/EntitlementKeyReference/Chapters/EnablingAppSandbox.html)
-and [UDP/network permissions](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.network.server).
-
-
-## RDP display modes — 9 October 2026
-
-SavedConnection adds optional rdpDisplayMode metadata, preserving existing entity
-and property identities. Missing or unknown values use Fit to window and retain
-existing dynamicResolution behavior. New and quick connections expose the same
-three-mode picker. Fixed 100% and Match window at connection disable remote resize
-requests; the latter waits for a laid-out desktop viewport before starting RDP,
-uses that area (bounded to 200–8192), and keeps it fixed until reconnecting.
-Cancellation clears pending sizing work and the connection callback checks the
-session generation before dialing.
-
-The session still owns its Metal view and latest-frame mailbox. DesktopSurface
-places it in a native NSScrollView for clipping and two-axis panning. At 100%, one
-remote pixel occupies one Mac point, independent of Retina backing pixels. The
-render rectangle also drives input coordinate conversion, including after panning.
-Scrollbars and Option-scroll pan locally; ordinary wheel input continues to Windows.
-Fit remains aspect-preserving and optionally uses existing dynamic server resizing.
-Sizing initially excludes scrollbars so Match window starts without scroll overflow.
-If the server negotiates another resolution, its delivered frame determines the
-actual desktop bounds.
-
-
-## Shared SSH/SFTP workspace — 9 October 2026
-
-Each SSH RemoteSession owns an SFTPController alongside its persistent terminal.
-Terminal, Files and vertically resizable Split are presentation choices within
-one session tab, preserving the existing profile, credential, endpoint trust and
-restoration identities. No SwiftData schema or protocol enum changes are needed.
-Files opens SFTP lazily on the already authenticated libssh2 session. A subsystem
-refusal reports a file error while leaving the SSH terminal available.
-
-The SSH worker exclusively owns shell/SFTP handles and a bounded file-request
-queue. It services terminal input/output and resize between file chunks and socket
-waits, retaining synchronous main-thread terminal backpressure. File I/O uses
-32 KiB buffers, listing count/UTF-8 bounds, and throttled progress. Only one file
-operation runs at once. UI callbacks check the session generation and operation ID;
-disconnect clears queued work and makes late results inert. Cancellation and
-operation timeouts disconnect the shared transport to avoid abandoning a pending
-libssh2 request and reusing its state. Listings have a 30-second bound; transfers
-have a 30-second no-progress bound, and handle closing has a five-second bound.
-
-Local access uses an explicit directory NSOpenPanel and a retained security scope.
-The app's user-selected-files entitlement is read/write; App Sandbox remains on.
-No bookmarks or broad filesystem entitlements are added. Upload sources are
-regular files opened with O_NOFOLLOW. Server creation uses CREAT|EXCL; downloads
-use an owner-only unique staging file inside the selected destination directory,
-fsync and a no-replacement hard link to publish the final name, then remove staging.
-Existing files are never replaced even if a collision appears after listing.
-Interrupted uploads remain on the server for inspection; automatic pathname-based
-cleanup could delete a replacement created by another client. File contents and
-paths are not included in protocol diagnostics or session logs.
-
-The browser does not follow listed symlinks, replace/resume files or support
-SFTP-only accounts. The context-menu/recursive extension below supersedes the
-original single-file transfer restriction. Servers
-without POSIX file type attributes may show nontransferable items. Hard-link support
-is required in the local destination filesystem; unsupported publication fails with
-no replacement. A server or local process can change a source during transfer;
-byte-count checks detect size changes but do not establish cryptographic integrity.
-
-
-## File actions, multi-selection and recursive work — 9 October 2026
-
-Each pane uses Set<String> selection with SwiftUI's selection-aware context menu
-and primary action. Right-click acts on the framework's contextual selection,
-including multiple files/folders. A session-scoped file buffer snapshots source
-paths and retains separate security-scoped access to copied/cut local sources.
-It supports paste on either side without reading/writing the system clipboard;
-Copy Path alone writes explicitly requested paths. Disconnect clears the buffer.
-No persistence/credential/trust identities or new filesystem permissions are added.
-
-SFTPController sequences top-level jobs and stops the batch at the first failure.
-Successfully moved entries leave the cut buffer; unfinished entries remain.
-Native tree operations preflight a sorted manifest with lstat, rejecting symlinks,
-special files, invalid names, more than 20,000 entries or 64 folder levels before
-creating destinations. Dot entries are ignored; unsupported real entries are errors
-rather than silently skipped. Empty directories are preserved. The existing leaf
-streaming, no-overwrite publication, terminal backpressure and request/generation
-checks remain. Completed leaves or directories can remain after later errors.
-
-Server mkdir/rename/remove use SFTP directly; rename requests no overwrite and
-checks the destination first. Same-side Cut uses rename; Copy downloads into an
-owner-only temporary tree then uploads it and cleans that staging tree. Cross-side
-Cut copies the complete top-level tree, rechecks its manifest and only then deletes
-its source bottom-up. Changed sources stop deletion; deletion failures can leave
-some originals after a complete destination copy. Source metadata checks also run
-before individual copy/delete steps. Remote metadata has server-specific precision;
-concurrent same-size writes can evade it. These operations require quiescent sources
-and do not provide a transaction, rollback or cryptographic snapshot guarantee.
-
-Local actions run off the main actor. Same-volume moves use renamex_np(RENAME_EXCL);
-cross-volume moves copy before verifying metadata and removing sources. Local copies
-preflight the tree, use O_NOFOLLOW/32 KiB streaming, owner-only staging, fsync and
-no-replacement links. A per-batch cancellation flag stops queued/chunk work; the
-controller is retained until the current local action ends to keep its folder scope
-alive. App Sandbox remains on. A completed rename/Trash action cannot be cancelled
-retroactively. Local deletion uses macOS Trash; recursive server deletion has an
-explicit permanent-delete confirmation. Paste for Cut has a move confirmation.
-
-Open/Reveal use NSWorkspace. Remote Open downloads a temporary snapshot to an
-owner-only per-open folder, then asks the default application to open it. These
-previews are retained for the OS's temporary-file lifecycle, not removed on tab close
-while another app could be editing them, and are never automatically uploaded.
-Copy/delete preflight still rejects links and special files. External editor access,
-Trash and non-APFS filesystem behavior need broader production validation.
-
-
-## Drag/drop, pipelining, Home and transfer cancellation — 9 October 2026
-
-The pane starts at the account Home from getpwuid (NSHomeDirectory is the app
-container under App Sandbox). Until permission exists, file access is gated and
-an NSOpenPanel starts at Home. A security-scoped bookmark for an approved Home is
-stored in app preferences and refreshed if stale; other chosen folders remain
-session-scoped. No broad filesystem entitlement or sandbox exception is added.
-The mode picker hides its visible label while keeping the accessibility name.
-
-macOS List rows use itemProvider and ForEach.onInsert, with folder/background drop
-handlers. Internal drags carry an opaque token as a standard string item provider;
-only the matching session's captured source paths can produce jobs. Multiple selected
-rows share a token. No clipboard is read and dropped text is not interpreted as
-paths. Finder file-URL providers load through loadObject, with scoped access and
-provider lifetimes retained until completion. Drop jobs reuse recursive validation,
-destination conflict policy and the batch queue. They always copy; cancellation/disconnect
-invalidates late provider callbacks. Downloads directly to Finder need file promises
-and remain deferred.
-
-Uploads use a bounded 4 MiB application window, allowing pinned libssh2 to pipeline
-its smaller SFTP WRITE packets; downloads use 256 KiB windows. TCP_NODELAY avoids
-small-packet delays. Readiness directions are captured before servicing the shell,
-since terminal reads can change libssh2's last-operation directions; polling uses
-the captured SFTP directions. Terminal pumping remains bounded/throttled, with its
-existing main-thread backpressure. The controlled 32 KiB/1 MiB latency comparison
-uses identical new code apart from upload window size, not an old-app binary.
-
-Cancel sets a separate file-work flag, stops subsequent batch/tree jobs, and drains
-the already submitted request/window before closing its active handle. It retains
-the idle SFTP channel and authenticated SSH shell. Read state resets through handle
-close; write windows finish their acknowledgements before abandoning their buffers.
-Local copies use their existing cancellation token. The UI waits for cleanup and
-shows Cancelled without presenting a failure alert. Partial uploaded files/completed
-folder leaves may remain; sources are retained until a move actually completes.
-Genuine transport/cleanup timeouts can still disconnect a broken SSH connection.
-
-## Maintenance scripts — 9 October 2026
-
-The dependency updater previews upstream pins, applies exact native revisions and
-Swift/Go lockfiles, rolls back tracked manifests on resolution failure, and
-invalidates generated native outputs. Current-major stable discovery limits
-accidental native ABI changes; explicit versions remain available. WireGuard's
-transitive graph is resolved together rather than replacing gVisor independently.
-Upstream notices still require review before distribution.
-
-Project cleanup selects disposable outputs within generated directories and ignored
-untracked logs/caches. Native installed libraries/source/build trees, Go dependency
-and build caches, Swift package downloads and the test virtual environment are
-preserved. `.build` is retained. Tracked fixture sources and protected local test
-input are preserved. The updater recognizes bare/v/V release tags, compares numeric
-major/minor/patch tuples and rejects dependency downgrades.
-User-data reset is a separate explicit destructive operation, scoped to the current
-bundle's Library storage and generic-password credential service. It calls
-SecItemDelete without fetching credential values, refuses a running app/helper or
-sudo, and rejects redirected storage paths. Defaults are cleared through the
-preferences service before disk cleanup. No app schema/storage changes are made.
-
-
-## Transfer conflicts, upload queue and Settings version — 9 October 2026
-
-Settings reads CFBundleShortVersionString from the built app, which Xcode derives
-from Version.xcconfig. There is no second hard-coded version value.
-
-Cross-side transfers merge existing real directories and ask before replacing each
-regular file, including recursive leaves. Stop cancels all remaining jobs; Overwrite
-approves one file; Overwrite All is controller state scoped to one batch and resets
-before the next batch. Local-to-local copy/move and rename retain their exclusive
-publication policy. Native callers without a conflict callback retain no-overwrite
-behavior. Server-to-server copies use the same upload conflict mechanism.
-
-The SSH worker emits a unique conflict token and filename, then continues pumping
-the terminal while waiting for a lock-protected, single-use response. There is no
-network-progress timeout while waiting for the user; the transfer deadline resets
-after approval. Cancellation/disconnect interrupts the wait; the main-actor callback
-checks client identity, busy state and cancellation. Closing the session clears its
-prompt. Existing destination links and special files are refused rather than followed.
-
-Overwrite downloads fsync a unique sibling file and rename it over the destination
-only after the read/handle close succeed. Overwrite uploads use exclusive sibling
-staging and posix-rename@openssh.com after successful transfer/close. Servers lacking
-that capability fail with the original retained; no delete-then-rename or in-place
-truncation fallback is used. Failed/cancelled overwrite uploads attempt staging
-cleanup; disconnected servers may retain a temporary file. As with other SFTP work,
-concurrent writers/parent-directory changes are outside transactional guarantees.
-New destination uploads retain exclusive creation and may leave a partial file.
-
-The upload window is now 4 MiB and refills after positive acknowledgements when at
-least 256 KiB has been consumed. Unacknowledged bytes remain identical; EAGAIN retries
-retain their buffer/length. This follows [libssh2's write-ahead contract](https://libssh2.org/libssh2_sftp_write.html). Terminal
-pumping and throttled progress run during refills as well as socket waits. Cancel
-stops refilling, drains the bounded submitted window, closes the handle, then stops
-the batch. Downloads retain their 256 KiB window. No extra SSH login or SFTP channel
-is created. Controlled comparisons and limits are recorded in validation.md.
-
-The original no-overwrite and 1 MiB descriptions above document earlier stages;
-this section supersedes those transfer policies.
+Deferred: SCP/WebDAV, SFTP resume/Finder download promises, SSH
+config/agent/jump hosts/forwarding/certificates/hardware keys, RDP Gateway/RemoteApp/
+microphone/devices/drives/multiple monitors/hardware video, nested folders/cloud sync/
+updater. The source license is undecided; synthetic passes do not establish production
+interoperability or distribution readiness.

@@ -1,5 +1,6 @@
 # Generated dependencies, binaries, synthetic fixture secrets and diagnostics
 .build/
+.dependencies/
 Vendor/Native/
 DerivedData/
 build/

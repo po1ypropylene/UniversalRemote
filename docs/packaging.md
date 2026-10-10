@@ -1,0 +1,58 @@
+# Packaging and signing
+
+Read this before changing bundle assembly, signing, sandbox entitlements or DMG creation.
+See [development](development.md) for versioning and release commands.
+
+## Local and distribution identities
+
+Local Debug/Release builds use ad-hoc signing with `ENABLE_HARDENED_RUNTIME=NO`.
+Never combine ad-hoc signing and hardened runtime: library validation rejects the
+bundled ad-hoc dylibs before Swift starts. DYLD can describe a library as missing
+when the detailed reason is signature rejection. Verify the actual file and
+runtime configuration before diagnosing a missing-library problem.
+
+Distribution requires a real Developer ID identity, hardened runtime, matching
+library/helper signatures and notarization. Do not add disable-library-validation
+or remove App Sandbox to hide signing errors. Distribution remains pending.
+
+## Repeatable bundle assembly
+
+`bundle-libraries.py` copies the entire native dependency closure to
+`Contents/Frameworks`, relocates load paths, and signs every copied library.
+The third-party notice directory is replaced before copying, so read-only licenses
+from a previous build cannot block updates or leave removed notices behind.
+
+The packaging phase always runs and changes sealed resources. `build.sh` recreates
+only the generated Release app before Xcode builds it, ensuring final app signing
+runs while preserving compiler/dependency caches. Reusing a sealed app while
+replacing dylibs can produce “a sealed resource is missing or invalid”.
+
+## Sandboxed WireGuard helper
+
+The child must be signed with exactly App Sandbox and sandbox-inherit entitlements.
+The parent needs both incoming and outgoing network rights for UDP reception and
+loopback TCP listeners. Unsandboxed command-line fixtures cannot establish packaged
+helper startup; use the real signed parent probe. No system VPN, TUN, route or DNS
+changes are required.
+
+## Final artifact checks
+
+`verify-bundle.py` checks macOS 27 deployment, arm64-only slices, dependency closure,
+relocated paths, signatures/teams, parent network rights and exact child entitlements.
+It invokes `--verify-bundle-launch` before UI/storage initialization to exercise DYLD,
+and `--verify-wireguard-helper` to start the real embedded helper with synthetic keys
+and an owned loopback endpoint, verify a listener and cleanup. Neither reads
+SwiftData, Keychain, saved profiles or private input.
+
+`build-dmg.sh` stages the verified app plus an Applications shortcut, creates a
+compressed read-only image, verifies the mounted app and ejects that exact volume.
+Temporary staging is cleaned on exit; failed detach preserves the staging directory
+to avoid deleting a mounted volume. It emits a version/build-named DMG and SHA256
+under `.build/releases`, with no commit, tag, upload or publishing operation.
+
+These rules retain the reusable conclusions from earlier launch/resource-seal/helper
+incidents. Original crash reports and one-off investigation logs are not repository
+assets; inspect any new failure against its own executable and stack.
+
+Apple references: [sandbox inheritance](https://developer.apple.com/library/archive/documentation/Miscellaneous/Reference/EntitlementKeyReference/Chapters/EnablingAppSandbox.html)
+and [network permissions](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.network.server).

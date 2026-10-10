@@ -4,9 +4,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 command -v cmake >/dev/null || { echo 'CMake is required to build dependencies (brew install cmake).' >&2; exit 1; }
 xcrun --find clang >/dev/null
-source_root="$PWD/.build/dependencies"
+source_root="$PWD/.dependencies/sources"
 install_root="$PWD/Vendor/Native"
-mkdir -p "$source_root" "$install_root" .build/openssl
+mkdir -p "$source_root" "$install_root" .dependencies/build/openssl
 fetch() {
   local name="$1" url="$2" tag="$3" revision="$4"
   if [[ ! -d "$source_root/$name/.git" ]]; then git clone --depth 1 --branch "$tag" "$url" "$source_root/$name"; fi
@@ -19,18 +19,18 @@ jobs="$(sysctl -n hw.ncpu)"
 [[ "$(uname -m)" == arm64 ]] || { echo "Universal Remote requires Apple silicon." >&2; exit 1; }
 openssl_target=darwin64-arm64-cc
 (
-  cd .build/openssl
-  ../dependencies/OpenSSL/Configure "$openssl_target" shared no-tests no-module --prefix="$install_root" --openssldir="$install_root/ssl" -mmacosx-version-min=27.0
+  cd .dependencies/build/openssl
+  ../../sources/OpenSSL/Configure "$openssl_target" shared no-tests no-module --prefix="$install_root" --openssldir="$install_root/ssl" -mmacosx-version-min=27.0
   make -j "$jobs"
   make install_sw
 )
-cmake -S "$source_root/libssh2" -B .build/libssh2 -DCMAKE_BUILD_TYPE=Release \
+cmake -S "$source_root/libssh2" -B .dependencies/build/libssh2 -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$install_root" -DCMAKE_OSX_DEPLOYMENT_TARGET=27.0 -DCMAKE_OSX_ARCHITECTURES=arm64 \
   -DBUILD_SHARED_LIBS=ON -DBUILD_STATIC_LIBS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
   -DCRYPTO_BACKEND=OpenSSL -DOPENSSL_ROOT_DIR="$install_root"
-cmake --build .build/libssh2 -j "$jobs"
-cmake --install .build/libssh2
-cmake -S "$source_root/FreeRDP" -B .build/freerdp -DCMAKE_BUILD_TYPE=Release \
+cmake --build .dependencies/build/libssh2 -j "$jobs"
+cmake --install .dependencies/build/libssh2
+cmake -S "$source_root/FreeRDP" -B .dependencies/build/freerdp -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$install_root" -DCMAKE_OSX_DEPLOYMENT_TARGET=27.0 -DCMAKE_OSX_ARCHITECTURES=arm64 \
   -DBUILD_SHARED_LIBS=ON -DWITH_CLIENT=OFF -DWITH_CLIENT_COMMON=ON -DWITH_SERVER=OFF \
   -DWITH_SAMPLE=OFF -DWITH_SDL=OFF -DWITH_X11=OFF -DWITH_FUSE=OFF -DWITH_CUPS=OFF \
@@ -41,8 +41,8 @@ cmake -S "$source_root/FreeRDP" -B .build/freerdp -DCMAKE_BUILD_TYPE=Release \
   -DCHANNEL_URBDRC=OFF -DWITH_MACAUDIO=ON -DWITH_AAD=OFF -DWITH_JSON_DISABLED=ON \
   -DOPENSSL_ROOT_DIR="$install_root" -DOPENSSL_INCLUDE_DIR="$install_root/include" \
   -DOPENSSL_CRYPTO_LIBRARY="$install_root/lib/libcrypto.dylib" -DOPENSSL_SSL_LIBRARY="$install_root/lib/libssl.dylib"
-cmake --build .build/freerdp -j "$jobs"
-cmake --install .build/freerdp
+cmake --build .dependencies/build/freerdp -j "$jobs"
+cmake --install .dependencies/build/freerdp
 printf 'Native dependencies are ready. Open UniversalRemote.xcodeproj and build.\n'
 printf 'arm64-macos27-audio1\n' > "$install_root/.platform"
 

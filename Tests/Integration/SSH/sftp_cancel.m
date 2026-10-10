@@ -2,8 +2,9 @@
 #import <Foundation/Foundation.h>
 int main(int argc, char **argv) {
     @autoreleasepool {
-        if (argc != 5)
+        if (argc != 5 && argc != 6)
             return 2;
+        BOOL filesOnly = argc == 6 && [@(argv[5]) isEqual:@"files-only"];
         BOOL upload = [@(argv[1]) isEqual:@"upload"];
         NSString *root = @(argv[3]);
         NSString *pin = [NSString stringWithContentsOfFile:@(argv[4]) encoding:NSUTF8StringEncoding error:nil];
@@ -19,6 +20,7 @@ int main(int argc, char **argv) {
                              echo = dispatch_semaphore_create(0);
         dispatch_semaphore_t finished = dispatch_semaphore_create(0);
         __block BOOL stopped = NO, cancelled = NO, responseError = NO, resumed = NO;
+        __block BOOL terminalUnavailable = NO;
         __block int trusts = 0;
         NSMutableString *text = [NSMutableString new];
         client.onTrust = ^BOOL(NSString *fingerprint, NSString *details) {
@@ -32,6 +34,9 @@ int main(int argc, char **argv) {
               stopped = YES;
               dispatch_semaphore_signal(finished);
           }
+        };
+        client.onTerminalAvailability = ^(BOOL available) {
+          terminalUnavailable = !available;
         };
         client.onData = ^(NSData *data) {
           [text appendString:[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ?: @""];
@@ -65,14 +70,16 @@ int main(int argc, char **argv) {
                         requestID:@"cancel"];
         BOOL timely = dispatch_semaphore_wait(reply, dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC)) == 0;
         [client sendData:[@"after-file-cancel\n" dataUsingEncoding:NSUTF8StringEncoding]];
-        BOOL terminal = dispatch_semaphore_wait(echo, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0;
+        BOOL terminal = filesOnly
+                            ? terminalUnavailable && text.length == 0
+                            : dispatch_semaphore_wait(echo, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0;
         [client listDirectory:@"/" requestID:@"resumed"];
         BOOL listed = dispatch_semaphore_wait(reply, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0;
         BOOL pass = timely && terminal && listed && cancelled && responseError && resumed && !stopped && trusts == 1;
         if (!upload)
             pass = pass && ![[NSFileManager defaultManager] fileExistsAtPath:local];
-        printf("%s SFTP cancel-%s-keeps-terminal-and-reopens-files\n", pass ? "PASS" : "FAIL",
-               upload ? "upload" : "download");
+        printf("%s SFTP cancel-%s-keeps-%s-and-reopens-files\n", pass ? "PASS" : "FAIL", upload ? "upload" : "download",
+               filesOnly ? "file-only-session" : "terminal");
         [client disconnect];
         pass = pass && dispatch_semaphore_wait(finished, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0;
         return pass ? 0 : 1;

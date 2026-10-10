@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 scripts/prepare-wireguard.sh
-fixture_root="$PWD/.build/wireguard-lifecycle"
+source scripts/test-support.sh wireguard-lifecycle
 mkdir -p "$fixture_root/Lifecycle.app/Contents/MacOS"
 xcrun clang -fobjc-arc -mmacosx-version-min=27.0 -I Vendor/Native/include -I Vendor/Native/include/freerdp3 -I Vendor/Native/include/winpr3 -L Vendor/Native/lib -Wl,-rpath,"$PWD/Vendor/Native/lib" -framework Foundation -framework Security -lfreerdp3 -lfreerdp-client3 -lwinpr3 -lcrypto Tests/Integration/WireGuard/native_identity.m -o "$fixture_root/native-identity"
 "$fixture_root/native-identity"

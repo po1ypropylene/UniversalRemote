@@ -85,7 +85,9 @@ def main():
         return
     # Validate parents before upstream tools can write caches or manifests.
     for path in (PREPARE, PROJECT, RESOLVED, GO / "go.mod", GO / "go.sum",
-                 ROOT / ".build/wireguard/mod", ROOT / "Vendor/Native/bin/UniversalRemoteWireGuard",
+                 ROOT / ".dependencies/go/modules", ROOT / ".dependencies/go/build",
+                 ROOT / ".dependencies/sources", ROOT / ".dependencies/build",
+                 ROOT / ".dependencies/swift-packages", ROOT / "Vendor/Native/bin/UniversalRemoteWireGuard",
                  ROOT / "ThirdParty/README.md", ROOT / "ThirdParty/WireGuard-build-modules.txt"):
         for ancestor in [path, *path.parents]:
             if ancestor == ROOT:
@@ -120,7 +122,7 @@ def main():
         project = re.sub(pattern, lambda m: m[1] + version + m[3], project)
         notices = re.sub(r'(\| SwiftTerm \| )[^|]+', rf'\g<1>{version} ', notices)
     env = os.environ.copy()
-    env.update(GOCACHE=str(ROOT / '.build/wireguard/cache'), GOMODCACHE=str(ROOT / '.build/wireguard/mod'))
+    env.update(GOCACHE=str(ROOT / '.dependencies/go/build'), GOMODCACHE=str(ROOT / '.dependencies/go/modules'))
     wg_version = None
     if selected['wireguard']:
         requested = selected['wireguard']
@@ -131,7 +133,7 @@ def main():
         wg_version = info['Version']
         print(f'WireGuard: -> {wg_version}; transitive modules resolved by Go (no independent gVisor upgrade).')
     if not args.apply:
-        print('Preview only (upstream queries may populate .build caches). Use --apply to write pins.')
+        print('Preview only (upstream queries may populate .dependencies caches). Use --apply to write pins.')
         return
     # Preflight deletion before any mutation. Never erase tracked or redirected outputs.
     spec = importlib.util.spec_from_file_location('clean_project', ROOT / 'scripts/clean-project.py')
@@ -140,8 +142,8 @@ def main():
     invalidated = []
     if updated_native:
         invalidated = [ROOT / relative for relative in (
-            '.build/dependencies', '.build/openssl', '.build/libssh2', '.build/freerdp',
-            '.build/rdp-fixture-source', '.build/rdp-fixture', 'Vendor/Native')]
+            '.dependencies/sources', '.dependencies/build',
+            '.dependencies/rdp-fixture', 'Vendor/Native')]
     elif wg_version:
         invalidated = [ROOT / 'Vendor/Native/bin/UniversalRemoteWireGuard']
     cleaner.validate_targets(ROOT, invalidated)
@@ -171,6 +173,7 @@ def main():
         if selected['swiftterm']:
             run(['xcodebuild', '-resolvePackageDependencies', '-project', 'UniversalRemote.xcodeproj',
                  '-scheme', 'UniversalRemote', '-derivedDataPath', '.build/Xcode',
+                 '-clonedSourcePackagesDirPath', '.dependencies/swift-packages',
                  '-skipPackagePluginValidation'])
             pins = json.loads(RESOLVED.read_text())['pins']
             pin = next(item for item in pins if item['identity'] == 'swiftterm')

@@ -10,7 +10,7 @@ Open the file in your own editor. Fill in host, port, username and password, and
 
 `expectedFingerprint` is the exact `SHA256:...` string shown by our adapter. Get it independently from a trusted administrator/server console. SSH automation refuses to authenticate without a pin. RDP automation accepts certificates validated by macOS for that host; if certificate validation fails, it requires an exact supplied pin. Leave a pin empty only for CA-valid RDP certificates. A changed identity fails instead of being silently accepted. UI connections always display the normal trust prompt, independently of this file.
 
-The file workflow supports **password authentication**. For private-key SSH, import the connection metadata and select the key in **Edit Connection**; keys/passphrases follow the same credential storage policy. Interactive/MFA connections require the UI. Do not add arbitrary key paths or secrets to source files to automate those methods.
+The file workflow supports **password authentication**, including recognized masked password challenges through keyboard-interactive. Additional Interactive/MFA questions require the UI; the probe cancels rather than guessing answers. For private-key SSH, import the connection metadata and select the key in **Edit Connection**; keys/passphrases follow the same credential storage policy. Do not add arbitrary key paths or secrets to source files to automate those methods.
 
 If the file is missing, `scripts/setup-local-testing.sh` recreates it from the blank example. Existing contents are preserved. If an editor replaces the file with broader permissions, rerun setup to restore 600. `.gitignore` prevents ordinary Git adds; it does not prevent `git add -f`, backups, uploads, or another program reading your files.
 
@@ -28,13 +28,27 @@ Earlier synthetic UI tests used **Quick Connect**, which deliberately does not s
 scripts/test-live-servers.sh
 ```
 
-The probe reads the protected local file in memory. Passwords are never process arguments. Output contains server ordinal, protocol, pass/fail or skip only; library stderr is suppressed. It opens/authenticates an SSH PTY shell (sends no commands) or waits for nonblack RDP desktop pixels (sends no input, clipboard disabled), then disconnects. A normal server session/audit record may be created; RDP can resume a user's existing desktop. Default timeout is 40 seconds per entry. Use dedicated test accounts/servers where possible.
+The probe reads the protected local file in memory. Passwords are never process arguments. Output contains the one-based document entry ordinal, protocol, pass/fail/skip and a fixed capability/failure-stage description; library stderr is suppressed. It opens/authenticates SSH (sends no commands, using SFTP if a shell is unavailable) or waits for nonblack RDP desktop pixels (sends no input, clipboard disabled), then disconnects. A normal server session/audit record may be created; RDP can resume a user's existing desktop. Default timeout is 40 seconds per entry. Use dedicated test accounts/servers where possible.
+
+To probe one explicitly authorized SSH entry and verify its SFTP directory access:
+
+```sh
+UNIVERSALREMOTE_TEST_SERVER=1 UNIVERSALREMOTE_TEST_SFTP=1 scripts/test-live-servers.sh
+```
+
+This reads directory metadata without printing file names, reading file contents,
+transferring files or changing remote data. Add `UNIVERSALREMOTE_TEST_CONFIGURED=1`
+only when testing populated disabled entries is explicitly authorized. If an
+independently supplied public SHA256 host-key fingerprint is available separately,
+`UNIVERSALREMOTE_TEST_SSH_PIN` can supply it for the selected entry without editing
+the protected file. This override requires `UNIVERSALREMOTE_TEST_SERVER`; the
+presented key must still match exactly. Never use an unverified network key.
 
 It returns a failure for identity, network, authentication or timeout failures. To investigate details, use the app locally; do not upload raw logs or screenshots with secrets. With all entries disabled, it reports **SKIP**, not successful real-server validation.
 
 Synthetic tests remain separate under `.build`. They use loopback-only SSH/sample RDP services, public test-only credentials, disposable certificates and their own RDP config directory. Fixtures are not silently imported into the user's persistent library.
 
-The protected-file probe itself is covered by `scripts/test-live-fixtures.sh`: synthetic SSH/RDP success, mismatched SSH fingerprint and malformed ID rejection. It never reads the real credentials file.
+The protected-file probe itself is covered by `scripts/test-live-fixtures.sh`: synthetic SSH/RDP success, selected SFTP/file-only access, supplied-pin matching, missing/non-SSH selections, mismatched SSH fingerprints and malformed ID rejection. It never reads the real credentials file.
 
 For an explicitly authorized test run of populated entries whose enabled flags are
 still false, use `UNIVERSALREMOTE_TEST_CONFIGURED=1 scripts/test-live-servers.sh`.

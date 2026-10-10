@@ -1,12 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-[[ -d .build/dependencies/FreeRDP ]] || scripts/prepare-dependencies.sh
-fixture_source="$PWD/.build/rdp-fixture-source"
-if [[ ! -d "$fixture_source" ]]; then cp -R .build/dependencies/FreeRDP "$fixture_source"; fi
+[[ -d .dependencies/sources/FreeRDP ]] || scripts/prepare-dependencies.sh
+fixture_source="$PWD/.dependencies/rdp-fixture/source"
+mkdir -p "$(dirname "$fixture_source")"
+if [[ ! -d "$fixture_source" ]]; then cp -R .dependencies/sources/FreeRDP "$fixture_source"; fi
 # Start from the exact upstream sample each time; production libraries are untouched.
-git -C .build/dependencies/FreeRDP show HEAD:server/Sample/sfreerdp.c > "$fixture_source/server/Sample/sfreerdp.c"
-git -C .build/dependencies/FreeRDP show HEAD:server/Sample/sfreerdp.h > "$fixture_source/server/Sample/sfreerdp.h"
+git -C .dependencies/sources/FreeRDP show HEAD:server/Sample/sfreerdp.c > "$fixture_source/server/Sample/sfreerdp.c"
+git -C .dependencies/sources/FreeRDP show HEAD:server/Sample/sfreerdp.h > "$fixture_source/server/Sample/sfreerdp.h"
 cp Tests/Integration/RDP/clipboard_fixture.h "$fixture_source/server/Sample/ur_clipboard_fixture.h"
 python3 - "$fixture_source/server/Sample/sfreerdp.c" <<'PY'
 from pathlib import Path
@@ -24,7 +25,7 @@ text = text.replace('client->PostConnect = tf_peer_post_connect;', '''if (getenv
     client->PostConnect = tf_peer_post_connect;''')
 path.write_text(text)
 PY
-cmake -S "$fixture_source" -B .build/rdp-fixture -DCMAKE_BUILD_TYPE=Release \
+cmake -S "$fixture_source" -B .dependencies/rdp-fixture/build -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=27.0 -DBUILD_SHARED_LIBS=ON -DWITH_CLIENT=OFF \
   -DWITH_CLIENT_COMMON=ON -DWITH_SERVER=ON -DWITH_SHADOW=OFF -DWITH_PROXY=OFF \
   -DWITH_SAMPLE=ON -DWITH_SDL=OFF -DWITH_X11=OFF -DWITH_FFMPEG=OFF \
@@ -32,4 +33,4 @@ cmake -S "$fixture_source" -B .build/rdp-fixture -DCMAKE_BUILD_TYPE=Release \
   -DWITH_PCSC=OFF -DWITH_CUPS=OFF -DWITH_FUSE=OFF -DWITH_AAD=OFF \
   -DWITH_JSON_DISABLED=ON -DCHANNEL_URBDRC=OFF -DWITH_MANPAGES=OFF \
   -DOPENSSL_ROOT_DIR="$PWD/Vendor/Native"
-cmake --build .build/rdp-fixture -j "$(sysctl -n hw.ncpu)"
+cmake --build .dependencies/rdp-fixture/build -j "$(sysctl -n hw.ncpu)"
