@@ -30,7 +30,7 @@ replacing dylibs can produce “a sealed resource is missing or invalid”.
 ## Selected-folder access
 
 The parent retains user-selected read/write access and the app-scoped bookmark
-entitlement in `Configuration/UniversalRemote.entitlements`. Persistent RDP folder
+entitlement in `Configuration/Farcast.entitlements`. Persistent RDP folder
 exports use these bookmarks; no broad filesystem or Full Disk Access entitlement
 is added. Xcode merges this file with generated sandbox/network entitlements.
 Final bundle verification checks both selected-file and bookmark rights.

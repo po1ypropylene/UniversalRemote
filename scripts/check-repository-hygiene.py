@@ -28,7 +28,7 @@ probes = ['.local-testing/servers.json', '.local-testing/keys/custom-name', 'sam
 for probe in probes:
     if subprocess.run(['git', 'check-ignore', '-q', '--no-index', probe], cwd=root).returncode != 0:
         failures += 1
-for source in ['UniversalRemote/Domain/ConnectionDraft.swift', 'Tests/Fixtures/servers.example.json', 'UniversalRemote.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved']:
+for source in ['Farcast/Domain/ConnectionDraft.swift', 'Tests/Fixtures/servers.example.json', 'Farcast.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved']:
     if subprocess.run(['git', 'check-ignore', '-q', '--no-index', source], cwd=root).returncode == 0:
         failures += 1
 example = json.loads((root / 'Tests/Fixtures/servers.example.json').read_text())

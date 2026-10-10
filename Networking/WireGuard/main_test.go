@@ -72,7 +72,7 @@ func fixture(t *testing.T) (request, *netstack.Net) {
 }
 func helper(t *testing.T, r request) (int, *exec.Cmd, io.WriteCloser, *bufio.Reader) {
 	t.Helper()
-	path := os.Getenv("UNIVERSALREMOTE_WG_HELPER")
+	path := os.Getenv("FARCAST_WG_HELPER")
 	if path == "" {
 		t.Fatal("helper path missing")
 	}
@@ -222,8 +222,8 @@ func TestParentEOFCleanup(t *testing.T) {
 	}
 }
 func TestRDPThroughWireGuard(t *testing.T) {
-	client := os.Getenv("UNIVERSALREMOTE_WG_RDP_CLIENT")
-	target := os.Getenv("UNIVERSALREMOTE_WG_RDP_FIXTURE_PORT")
+	client := os.Getenv("FARCAST_WG_RDP_CLIENT")
+	target := os.Getenv("FARCAST_WG_RDP_FIXTURE_PORT")
 	if client == "" || target == "" {
 		t.Skip("RDP fixture not requested")
 	}
@@ -250,7 +250,7 @@ func TestRDPThroughWireGuard(t *testing.T) {
 			}()
 			port, _, _, _ := helper(t, r)
 			cmd := exec.Command(client, mode, strconv.Itoa(r.Port))
-			cmd.Env = append(os.Environ(), "UNIVERSALREMOTE_FIXTURE_TUNNEL_PORT="+strconv.Itoa(port), "UNIVERSALREMOTE_FIXTURE_TUNNEL_TOKEN="+r.Token)
+			cmd.Env = append(os.Environ(), "FARCAST_FIXTURE_TUNNEL_PORT="+strconv.Itoa(port), "FARCAST_FIXTURE_TUNNEL_TOKEN="+r.Token)
 			if result, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("RDP fixture failed: %s", result)
 			}

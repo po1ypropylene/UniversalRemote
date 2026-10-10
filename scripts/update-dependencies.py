@@ -10,8 +10,8 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 PREPARE = ROOT / 'scripts/prepare-dependencies.sh'
-PROJECT = ROOT / 'UniversalRemote.xcodeproj/project.pbxproj'
-RESOLVED = ROOT / 'UniversalRemote.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'
+PROJECT = ROOT / 'Farcast.xcodeproj/project.pbxproj'
+RESOLVED = ROOT / 'Farcast.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'
 GO = ROOT / 'Networking/WireGuard'
 NATIVE = {
     'openssl': ('OpenSSL', 'https://github.com/openssl/openssl.git', 'openssl-'),
@@ -87,7 +87,7 @@ def main():
     for path in (PREPARE, PROJECT, RESOLVED, GO / "go.mod", GO / "go.sum",
                  ROOT / ".dependencies/go/modules", ROOT / ".dependencies/go/build",
                  ROOT / ".dependencies/sources", ROOT / ".dependencies/build",
-                 ROOT / ".dependencies/swift-packages", ROOT / "Vendor/Native/bin/UniversalRemoteWireGuard",
+                 ROOT / ".dependencies/swift-packages", ROOT / "Vendor/Native/bin/FarcastWireGuard",
                  ROOT / "ThirdParty/README.md", ROOT / "ThirdParty/WireGuard-build-modules.txt"):
         for ancestor in [path, *path.parents]:
             if ancestor == ROOT:
@@ -145,7 +145,7 @@ def main():
             '.dependencies/sources', '.dependencies/build',
             '.dependencies/rdp-fixture', 'Vendor/Native')]
     elif wg_version:
-        invalidated = [ROOT / 'Vendor/Native/bin/UniversalRemoteWireGuard']
+        invalidated = [ROOT / 'Vendor/Native/bin/FarcastWireGuard']
     cleaner.validate_targets(ROOT, invalidated)
     files = [PREPARE, PROJECT, RESOLVED, GO / 'go.mod', GO / 'go.sum',
              ROOT / 'ThirdParty/README.md', ROOT / 'ThirdParty/WireGuard-build-modules.txt']
@@ -171,8 +171,8 @@ def main():
                     notices = re.sub(rf'(\| {re.escape(label)} \| )[^|]+',
                                      lambda m: m[1] + versions[module] + ' ', notices)
         if selected['swiftterm']:
-            run(['xcodebuild', '-resolvePackageDependencies', '-project', 'UniversalRemote.xcodeproj',
-                 '-scheme', 'UniversalRemote', '-derivedDataPath', '.build/Xcode',
+            run(['xcodebuild', '-resolvePackageDependencies', '-project', 'Farcast.xcodeproj',
+                 '-scheme', 'Farcast', '-derivedDataPath', '.build/Xcode',
                  '-clonedSourcePackagesDirPath', '.dependencies/swift-packages',
                  '-skipPackagePluginValidation'])
             pins = json.loads(RESOLVED.read_text())['pins']

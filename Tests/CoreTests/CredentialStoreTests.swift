@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 
-@testable import UniversalRemoteCore
+@testable import FarcastCore
 
 final class CredentialStoreTests: XCTestCase {
     func testLocalCredentialsSurviveReopeningAndReplacementWithOwnerOnlyPermissions() throws {

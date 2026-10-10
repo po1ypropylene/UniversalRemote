@@ -36,12 +36,12 @@ enum CleanupDouble {
         }
     }
 }
-enum URSSHClient {
+enum FCSSHClient {
     static func whenAllDisconnected(_ completion: @escaping () -> Void) {
         CleanupDouble.drain(after: 0.05, completion: completion)
     }
 }
-enum URRDPClient {
+enum FCRDPClient {
     static func whenAllDisconnected(_ completion: @escaping () -> Void) {
         CleanupDouble.drain(after: 0.1, completion: completion)
     }
@@ -57,7 +57,7 @@ enum WireGuardTransport {
         if let mode = CommandLine.arguments.dropFirst().first {
             terminationCheck(mode)
         }
-        let suite = "com.peterpo.UniversalRemote.WorkspaceTests.\(UUID().uuidString)"
+        let suite = "com.peterpo.farcast.WorkspaceTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         var refuseCredentials = false
@@ -180,7 +180,7 @@ enum WireGuardTransport {
     @MainActor static func terminationCheck(_ mode: String) -> Never {
         precondition(mode == "close-window" || mode == "quit")
         let app = NSApplication.shared
-        let suite = "com.peterpo.UniversalRemote.TerminationTests.\(UUID().uuidString)"
+        let suite = "com.peterpo.farcast.TerminationTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         let workspace = Workspace(loadCredential: { _ in ConnectionCredential() }, defaults: defaults)
         var draft = ConnectionDraft()

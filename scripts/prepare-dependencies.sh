@@ -16,7 +16,7 @@ fetch OpenSSL https://github.com/openssl/openssl.git openssl-3.6.5 c8bd5a5710859
 fetch libssh2 https://github.com/libssh2/libssh2.git libssh2-1.11.1 a312b43325e3383c865a87bb1d26cb52e3292641
 fetch FreeRDP https://github.com/FreeRDP/FreeRDP.git 3.32.1 bf217a504e54cc719880c228e82353382cd7d4fa
 jobs="$(sysctl -n hw.ncpu)"
-[[ "$(uname -m)" == arm64 ]] || { echo "Universal Remote requires Apple silicon." >&2; exit 1; }
+[[ "$(uname -m)" == arm64 ]] || { echo "Farcast requires Apple silicon." >&2; exit 1; }
 openssl_target=darwin64-arm64-cc
 (
   cd .dependencies/build/openssl
@@ -43,7 +43,7 @@ cmake -S "$source_root/FreeRDP" -B .dependencies/build/freerdp -DCMAKE_BUILD_TYP
   -DOPENSSL_CRYPTO_LIBRARY="$install_root/lib/libcrypto.dylib" -DOPENSSL_SSL_LIBRARY="$install_root/lib/libssl.dylib"
 cmake --build .dependencies/build/freerdp -j "$jobs"
 cmake --install .dependencies/build/freerdp
-printf 'Native dependencies are ready. Open UniversalRemote.xcodeproj and build.\n'
+printf 'Native dependencies are ready. Open Farcast.xcodeproj and build.\n'
 printf 'arm64-macos27-audio1\n' > "$install_root/.platform"
 
 scripts/prepare-wireguard.sh

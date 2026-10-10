@@ -7,13 +7,13 @@ int main(int argc, char **argv) {
             return 2;
         NSString *mode = @(argv[1]);
         NSInteger port = atoi(argv[2]);
-        URRDPClient *client = [URRDPClient new];
-        NSString *tunnelPort = NSProcessInfo.processInfo.environment[@"UNIVERSALREMOTE_FIXTURE_TUNNEL_PORT"];
+        FCRDPClient *client = [FCRDPClient new];
+        NSString *tunnelPort = NSProcessInfo.processInfo.environment[@"FARCAST_FIXTURE_TUNNEL_PORT"];
         if (tunnelPort) {
             client.tunnelPort = tunnelPort.integerValue;
-            client.tunnelToken = NSProcessInfo.processInfo.environment[@"UNIVERSALREMOTE_FIXTURE_TUNNEL_TOKEN"];
+            client.tunnelToken = NSProcessInfo.processInfo.environment[@"FARCAST_FIXTURE_TUNNEL_TOKEN"];
         }
-        __weak URRDPClient *weakClient = client;
+        __weak FCRDPClient *weakClient = client;
         dispatch_semaphore_t done = dispatch_semaphore_create(0);
         __block BOOL trusted = NO, connected = NO, failed = NO, frame = NO;
         BOOL clipboardTest = [mode isEqualToString:@"clipboard"];
@@ -21,13 +21,13 @@ int main(int argc, char **argv) {
         __block BOOL drivePassed = NO;
         BOOL fileTest = [mode isEqualToString:@"files"];
         __block BOOL filesPassed = NO;
-        __block URRDPClipboardFileBatch *receivedBatch = nil;
+        __block FCRDPClipboardFileBatch *receivedBatch = nil;
         NSURL *source = nil;
         NSMutableData *fileBytes = [NSMutableData dataWithLength:700123];
         for (NSUInteger i = 0; i < fileBytes.length; i++)
             ((uint8_t *)fileBytes.mutableBytes)[i] = (uint8_t)(i * 31);
         if (fileTest) {
-            source = [[NSURL fileURLWithPath:NSProcessInfo.processInfo.environment[@"UNIVERSALREMOTE_RDP_CONFIG"]]
+            source = [[NSURL fileURLWithPath:NSProcessInfo.processInfo.environment[@"FARCAST_RDP_CONFIG"]]
                 URLByAppendingPathComponent:@"Clipboard folder"];
             [[NSFileManager defaultManager] createDirectoryAtURL:[source URLByAppendingPathComponent:@"Nested"]
                                      withIntermediateDirectories:YES
@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
                 setAttributes:@{NSFileModificationDate : [NSDate dateWithTimeIntervalSince1970:946684800]}
                  ofItemAtPath:[source URLByAppendingPathComponent:@"Nested/繁體😀.bin"].path
                         error:NULL];
-            client.onClipboardBatch = ^(URRDPClipboardFileBatch *batch) {
+            client.onClipboardBatch = ^(FCRDPClipboardFileBatch *batch) {
               receivedBatch = batch;
               NSArray<NSURL *> *files = batch.files;
               filesPassed =
@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
         __block NSUInteger clipboardCount = 0;
         NSURL *exportURL = nil;
         if (driveTest) {
-            exportURL = [[NSURL fileURLWithPath:NSProcessInfo.processInfo.environment[@"UNIVERSALREMOTE_RDP_CONFIG"]]
+            exportURL = [[NSURL fileURLWithPath:NSProcessInfo.processInfo.environment[@"FARCAST_RDP_CONFIG"]]
                 URLByAppendingPathComponent:@"Redirected"];
             [NSFileManager.defaultManager createDirectoryAtURL:exportURL
                                    withIntermediateDirectories:YES
@@ -135,7 +135,7 @@ int main(int argc, char **argv) {
               audioPlayback:YES];
         BOOL timeout = dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 25 * NSEC_PER_SEC)) != 0;
         [client disconnect];
-        [URRDPClient whenAllDisconnected:^{
+        [FCRDPClient whenAllDisconnected:^{
           dispatch_semaphore_signal(done);
         }];
         BOOL drained = dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0;
@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
                    fabs(modified.timeIntervalSince1970 - 946684800) < 1;
             // This batch was created by this synthetic client, never a user path.
             NSURL *stage = receivedBatch.files.firstObject.URLByDeletingLastPathComponent;
-            if ([stage.lastPathComponent hasPrefix:@"UniversalRemote-RDP-"])
+            if ([stage.lastPathComponent hasPrefix:@"Farcast-RDP-"])
                 [NSFileManager.defaultManager removeItemAtURL:stage error:NULL];
         }
         if (driveTest) {

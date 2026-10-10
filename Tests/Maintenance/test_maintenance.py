@@ -171,8 +171,8 @@ exit {status}
     def test_updater_rolls_back_pin_changes_on_resolution_failure(self):
         module = load('update-dependencies')
         for relative in ('scripts/update-dependencies.py', 'scripts/clean-project.py', 'scripts/prepare-dependencies.sh',
-                         'UniversalRemote.xcodeproj/project.pbxproj',
-                         'UniversalRemote.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved',
+                         'Farcast.xcodeproj/project.pbxproj',
+                         'Farcast.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved',
                          'Networking/WireGuard/go.mod', 'Networking/WireGuard/go.sum',
                          'ThirdParty/README.md', 'ThirdParty/WireGuard-build-modules.txt'):
             path = self.root / relative
@@ -181,8 +181,8 @@ exit {status}
         module = load('update-dependencies')
         module.ROOT = self.root
         module.PREPARE = self.root / 'scripts/prepare-dependencies.sh'
-        module.PROJECT = self.root / 'UniversalRemote.xcodeproj/project.pbxproj'
-        module.RESOLVED = self.root / 'UniversalRemote.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'
+        module.PROJECT = self.root / 'Farcast.xcodeproj/project.pbxproj'
+        module.RESOLVED = self.root / 'Farcast.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'
         module.GO = self.root / 'Networking/WireGuard'
         self.git('init', '-q')
         before = {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file() and '.git' not in p.parts}
@@ -197,7 +197,7 @@ exit {status}
 
     def test_user_reset_success_removes_only_owned_storage(self):
         module = load('clean-user-data')
-        owned = self.root / 'Library/Application Support/UniversalRemote'
+        owned = self.root / 'Library/Application Support/Farcast'
         owned.mkdir(parents=True)
         (owned / 'record').write_text('synthetic')
         other = self.root / 'Library/Application Support/OtherApp'
@@ -224,7 +224,7 @@ exit {status}
 
     def test_user_reset_is_exactly_scoped_and_keychain_failure_preserves_files(self):
         module = load('clean-user-data')
-        library = self.root / 'Library/Application Support/UniversalRemote'
+        library = self.root / 'Library/Application Support/Farcast'
         library.mkdir(parents=True)
         (library / 'synthetic').write_text('keep')
         calls = []
@@ -244,7 +244,7 @@ exit {status}
                 module.main()
         self.assertEqual((library / 'synthetic').read_text(), 'keep')
         self.assertIn('kSecAttrService', module.KEYCHAIN_SOURCE)
-        self.assertIn('com.peterpo.UniversalRemote.credentials', module.KEYCHAIN_SOURCE)
+        self.assertIn('com.peterpo.farcast.credentials', module.KEYCHAIN_SOURCE)
         self.assertNotIn('SecItemCopyMatching', module.KEYCHAIN_SOURCE)
         self.assertFalse(any(c[0] == 'defaults' for c in calls))
 

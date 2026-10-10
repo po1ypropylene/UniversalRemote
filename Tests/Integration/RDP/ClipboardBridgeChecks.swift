@@ -41,7 +41,7 @@ import AppKit
         let stagedFile = stage.appendingPathComponent("provided.bin")
         try! Data([1, 2, 3]).write(to: stagedFile)
         bridge.remoteChanged()
-        let batch = URRDPClipboardFileBatch(root: stage, files: [stagedFile])!
+        let batch = FCRDPClipboardFileBatch(root: stage, files: [stagedFile])!
         bridge.receive(batch: batch)
         bridge.invalidate()
         let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]

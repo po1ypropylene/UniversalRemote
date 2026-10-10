@@ -21,8 +21,8 @@ int main(int argc, char **argv) {
         NSString *download = [root stringByAppendingPathComponent:[mode stringByAppendingString:@"-download.bin"]];
         [source writeToFile:local atomically:YES];
         [[NSFileManager defaultManager] removeItemAtPath:download error:nil];
-        URSSHClient *client = [URSSHClient new];
-        __weak URSSHClient *weak = client;
+        FCSSHClient *client = [FCSSHClient new];
+        __weak FCSSHClient *weak = client;
         dispatch_semaphore_t done = dispatch_semaphore_create(0);
         __block BOOL passed = NO, input = NO, resized = NO, cancelling = NO;
         __block BOOL terminalUnavailable = NO, connected = NO, listed = NO;
@@ -220,7 +220,7 @@ int main(int argc, char **argv) {
         if ([mode isEqual:@"no-sftp"])
             passed = passed && input && resized;
         for (NSString *name in [[NSFileManager defaultManager] contentsOfDirectoryAtPath:root error:nil])
-            if ([name hasPrefix:@".universalremote-transfer-"])
+            if ([name hasPrefix:@".farcast-transfer-"])
                 passed = NO;
         printf("%s SFTP %s\n", passed ? "PASS" : "FAIL", mode.UTF8String);
         return passed ? 0 : 1;

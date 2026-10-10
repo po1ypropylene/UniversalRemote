@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 import XCTest
 
-@testable import UniversalRemoteCore
+@testable import FarcastCore
 
 final class WireGuardTests: XCTestCase {
     private var fixture: String {

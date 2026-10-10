@@ -17,7 +17,7 @@ int main(int argc, char **argv) {
             bytes[i] = state & 255;
         }
         [source writeToFile:path atomically:YES];
-        URSSHClient *client = [URSSHClient new];
+        FCSSHClient *client = [FCSSHClient new];
         dispatch_semaphore_t ready = dispatch_semaphore_create(0), done = dispatch_semaphore_create(0);
         dispatch_semaphore_t finished = dispatch_semaphore_create(0);
         __block BOOL pass = NO;

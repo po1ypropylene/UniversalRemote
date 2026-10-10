@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reset only Universal Remote's current-user data and credential service."""
+"""Reset only Farcast's current-user data and credential service."""
 import argparse
 import os
 from pathlib import Path
@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import tempfile
 
-BUNDLE = 'com.peterpo.UniversalRemote'
+BUNDLE = 'com.peterpo.farcast'
 SERVICE = BUNDLE + '.credentials'
 KEYCHAIN_SOURCE = '''import Foundation
 import Security
@@ -16,7 +16,7 @@ let context = LAContext()
 context.interactionNotAllowed = true
 let query: [String: Any] = [
     kSecClass as String: kSecClassGenericPassword,
-    kSecAttrService as String: "com.peterpo.UniversalRemote.credentials",
+    kSecAttrService as String: "com.peterpo.farcast.credentials",
     kSecUseAuthenticationContext as String: context
 ]
 let status = SecItemDelete(query as CFDictionary)
@@ -24,7 +24,7 @@ guard status == errSecSuccess || status == errSecItemNotFound else {
     fputs("Credential deletion failed (OSStatus \\(status)). Unlock/authorize the Keychain and retry.\\n", stderr)
     exit(1)
 }
-print("Universal Remote credential service cleared (or already empty).")
+print("Farcast credential service cleared (or already empty).")
 '''
 
 
@@ -32,35 +32,35 @@ def targets(home):
     library = home / 'Library'
     return [library / relative for relative in (
         f'Containers/{BUNDLE}',
-        'Application Support/UniversalRemote',
+        'Application Support/Farcast',
         f'Application Support/{BUNDLE}',
         f'Caches/{BUNDLE}',
         f'HTTPStorages/{BUNDLE}',
         f'WebKit/{BUNDLE}',
         f'Preferences/{BUNDLE}.plist',
         f'Saved Application State/{BUNDLE}.savedState',
-    )] + [Path(tempfile.gettempdir()) / 'UniversalRemote-Previews']
+    )] + [Path(tempfile.gettempdir()) / 'Farcast-Previews']
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply', action='store_true', help='Permanently delete profiles, trust, settings and credentials.')
     args = parser.parse_args()
-    print('Deletes current-user Universal Remote profiles/folders, WireGuard profiles/keys,')
+    print('Deletes current-user Farcast profiles/folders, WireGuard profiles/keys,')
     print('passwords/private keys, trust decisions, preferences, bookmarks, caches and SFTP previews.')
     print(f'Keychain scope: generic-password items with service {SERVICE}.')
     print('Preserves the installed app, repository, .local-testing, and unrelated Library/Keychain data.')
     if not args.apply:
-        print('Preview only. Quit Universal Remote, then use --apply for a permanent reset.')
+        print('Preview only. Quit Farcast, then use --apply for a permanent reset.')
         return
     if os.geteuid() == 0:
         raise RuntimeError('Run as your own user without sudo.')
-    for process in ('Universal Remote', 'UniversalRemoteWireGuard'):
+    for process in ('Farcast', 'FarcastWireGuard'):
         status = subprocess.run(['pgrep', '-x', process], stdout=subprocess.DEVNULL).returncode
         if status == 0:
-            raise RuntimeError('Quit Universal Remote and its tunnel helper before resetting data.')
+            raise RuntimeError('Quit Farcast and its tunnel helper before resetting data.')
         if status != 1:
-            raise RuntimeError('Could not check whether Universal Remote is running.')
+            raise RuntimeError('Could not check whether Farcast is running.')
     home = Path.home()
     paths = targets(home)
     for path in paths:
@@ -71,7 +71,7 @@ def main():
             if ancestor.is_symlink():
                 raise RuntimeError('Refusing reset through a symbolic-link storage path.')
     # Compile before deleting anything. No credential lookup/export or secret output.
-    with tempfile.TemporaryDirectory(prefix='universalremote-reset-') as folder:
+    with tempfile.TemporaryDirectory(prefix='farcast-reset-') as folder:
         source = Path(folder) / 'reset.swift'
         binary = Path(folder) / 'reset'
         source.write_text(KEYCHAIN_SOURCE)

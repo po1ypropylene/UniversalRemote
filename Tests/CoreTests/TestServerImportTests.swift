@@ -1,7 +1,7 @@
 import SwiftData
 import XCTest
 
-@testable import UniversalRemoteCore
+@testable import FarcastCore
 
 final class TestServerImportTests: XCTestCase {
     private func document(enabled: Bool = true, port: Int = 22) -> Data {

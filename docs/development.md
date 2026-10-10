@@ -35,11 +35,11 @@ or upgrade Xcode, CMake, Python, Go, or test-only Paramiko.
 
 Project cleanup removes all of `.build`, `DerivedData` and `build`, including app/compiler outputs, release DMGs, generated test data and ignored untracked logs/Python caches. It preserves `.dependencies`, `Vendor/Native`, tracked source fixtures, `.local-testing` and user Library/Keychain data. Stop builds and fixture servers before cleaning. Rebuild the app with `scripts/build.sh`; dependency downloads and installed libraries survive cleanup. Cleanup rejects tracked generated files and redirected build-directory parents, and never follows symlinks during deletion.
 
-User-data cleanup permanently removes this account's Universal Remote container,
+User-data cleanup permanently removes this account's Farcast container,
 local credential fallback, preferences, cached/saved state and temporary SFTP previews.
 This includes saved connections/folders, WireGuard profiles/keys, passwords/imported
 private-key copies, server trust, settings and local-folder bookmarks. It deletes only
-generic-password Keychain items in `com.peterpo.UniversalRemote.credentials`, without
+generic-password Keychain items in `com.peterpo.farcast.credentials`, without
 reading/exporting credentials. Quit the app and tunnel helper, run as your own user
 without sudo, and retain any exports you need first. Keychain authorization or macOS
 Library protections may block deletion; failures return a nonzero status and can leave
@@ -69,8 +69,8 @@ read-only DMG alongside an Applications shortcut, mounts the image to verify the
 packaged app's signatures/libraries/loader, then ejects it. It writes:
 
 ```text
-.build/releases/Universal-Remote-<version>-build-<build>-arm64.dmg
-.build/releases/Universal-Remote-<version>-build-<build>-arm64.dmg.sha256
+.build/releases/Farcast-<version>-build-<build>-arm64.dmg
+.build/releases/Farcast-<version>-build-<build>-arm64.dmg.sha256
 ```
 
 The filename comes from the built app's version fields. Rebuilding the same
@@ -83,7 +83,7 @@ To check a downloaded DMG, place both files together and run
 
 This workflow uses the current **ad-hoc, unnotarized development build**. It does
 not provide Developer ID signing or notarization; those remain a separate
-production-release task. Users drag Universal Remote into Applications after
+production-release task. Users drag Farcast into Applications after
 opening the DMG. Test the installed copy on another Apple silicon Mac before a
 public release. The minimum supported system is macOS 27.
 

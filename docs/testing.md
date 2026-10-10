@@ -1,5 +1,12 @@
 # Testing
 
+`scripts/test-library-migration.sh` seeds a disposable database using the previous
+Swift module, imports it with Farcast's module, then reopens the destination. It
+checks profile/folder/tunnel IDs, raw metadata/dates/bookmarks, opted-in synthetic
+credentials and allowlisted settings, with byte-for-byte unchanged source input.
+Core tests cover import refusal for nonempty destinations, credential opt-in,
+malformed input and symbolic links. No user library or Keychain is read.
+
 ```sh
 swift test --scratch-path .build/core-tests
 
@@ -47,7 +54,7 @@ byte-verified transfers/overwrites and cancellation
 that retains file access without a terminal. The RDP fixture uses
 an upstream sample desktop, not the user's screen, and checks TLS trust decisions,
 framebuffer delivery, and cancellation. It can also enable NLA with a synthetic
-SAM file through `UNIVERSALREMOTE_FIXTURE_NLA` and `UNIVERSALREMOTE_FIXTURE_SAM`.
+SAM file through `FARCAST_FIXTURE_NLA` and `FARCAST_FIXTURE_SAM`.
 The disposable RDP fixture also echoes synthetic Unicode clipboard text through
 the actual clipboard channel, including updates and clearing. It also relays file
 lists/locks/ranges in both directions for nested folders, Unicode names, binary

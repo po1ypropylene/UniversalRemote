@@ -75,7 +75,7 @@ class Files(paramiko.SFTPServerInterface):
             class Handle(paramiko.SFTPHandle):
                 def stat(self): return paramiko.SFTPAttributes.from_stat(os.fstat(stream.fileno()))
                 def write(self, offset, data):
-                    if file.name == 'slow-upload.bin' or file.name.startswith('.universalremote-transfer-'): time.sleep(0.003)
+                    if file.name == 'slow-upload.bin' or file.name.startswith('.farcast-transfer-'): time.sleep(0.003)
                     return super().write(offset, data)
                 def read(self, offset, length):
                     if file.name == 'mutating.bin' and not getattr(self, 'touched', False):

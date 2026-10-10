@@ -15,7 +15,7 @@ import Foundation
         let names = ["a.bin", "b.bin", "tree/nested.bin"]
         for name in names { try! old.write(to: source.appendingPathComponent(name)) }
         let controller = SFTPController(homeURL: source, requiresAccess: false)
-        let client = URSSHClient()
+        let client = FCSSHClient()
         let pin = try! String(contentsOfFile: CommandLine.arguments[3], encoding: .utf8)
         var connected = false
         var stopped = false
@@ -129,7 +129,7 @@ import Foundation
             (try? Data(contentsOf: destination.appendingPathComponent(unsupported.name))) == old,
             "unsupported-atomic-replace-retains-original")
         check(
-            !controller.remoteFiles.contains { $0.name.hasPrefix(".universalremote-transfer-") },
+            !controller.remoteFiles.contains { $0.name.hasPrefix(".farcast-transfer-") },
             "no-remote-staging-leftovers")
         let cancellable = TransferFile(name: "slow-upload.bin", directory: false, regular: true, size: 5)
         controller.localURL = source
@@ -152,7 +152,7 @@ import Foundation
                 && (try? Data(contentsOf: destination.appendingPathComponent(cancellable.name))) == old,
             "cancel-overwrite-upload-retains-original-and-session")
         check(
-            !controller.remoteFiles.contains { $0.name.hasPrefix(".universalremote-transfer-") },
+            !controller.remoteFiles.contains { $0.name.hasPrefix(".farcast-transfer-") },
             "cancel-removes-remote-staging")
         try! files.removeItem(at: destination.appendingPathComponent("a.bin"))
         try! files.createSymbolicLink(
@@ -171,7 +171,7 @@ import Foundation
         await wait { stopped }
         check(controller.conflict == nil && !controller.busy && stopped, "disconnect-clears-prompt")
         let remaining = (try? files.subpathsOfDirectory(atPath: destination.path)) ?? []
-        check(!remaining.contains { $0.contains(".universalremote-transfer-") }, "no-local-staging-leftovers")
+        check(!remaining.contains { $0.contains(".farcast-transfer-") }, "no-local-staging-leftovers")
         if failures > 0 { exit(1) }
     }
 }

@@ -1,4 +1,4 @@
-module com.peterpo.universalremote/wireguard
+module com.peterpo.farcast/wireguard
 
 go 1.27.0
 

@@ -53,13 +53,13 @@ for executable in (app / 'Contents/MacOS').iterdir():
     for dependency in dependencies(executable):
         if Path(dependency).name in sources:
             subprocess.run(['install_name_tool', '-change', dependency, '@rpath/' + Path(dependency).name, str(executable)], check=True)
-helper_source = prefix / 'bin' / 'UniversalRemoteWireGuard'
+helper_source = prefix / 'bin' / 'FarcastWireGuard'
 if not helper_source.is_file():
     raise SystemExit('Missing embedded WireGuard helper. Run scripts/prepare-wireguard.sh first.')
-helper = app / 'Contents/MacOS/UniversalRemoteWireGuard'
+helper = app / 'Contents/MacOS/FarcastWireGuard'
 shutil.copy2(helper_source, helper)
 helper.chmod(0o755)
-helper_signing = ['codesign', '--force', '--sign', identity, '--timestamp=none']
+helper_signing = ['codesign', '--force', '--sign', identity, '--identifier', 'com.peterpo.farcast.wireguard', '--timestamp=none']
 if os.environ.get('ENABLE_HARDENED_RUNTIME') == 'YES':
     helper_signing += ['--options', 'runtime']
 helper_entitlements = Path(__file__).resolve().parent.parent / 'Configuration/WireGuardHelper.entitlements'

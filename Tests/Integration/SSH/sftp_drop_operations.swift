@@ -17,7 +17,7 @@ import UniformTypeIdentifiers
         try! data.write(to: source.appendingPathComponent("drop-file.bin"))
         let pin = try! String(contentsOfFile: CommandLine.arguments[3], encoding: .utf8)
         let controller = SFTPController(homeURL: source, requiresAccess: false)
-        let client = URSSHClient()
+        let client = FCSSHClient()
         var connected = false
         var stopped = false
         var failures = 0

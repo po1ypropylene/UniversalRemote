@@ -4,7 +4,7 @@
 
 `.local-testing/servers.json (relative to the repository root)`
 
-This file has already been created. The directory is owner-only (700); the file is owner read/write (600). The entire directory is excluded by `.gitignore`. Keep keys and certificates there too. The file is **plain text on your Mac**, not encrypted; do not put it in a shared/synced directory or paste it into chat. App credentials use encrypted macOS Keychain when available; the development fallback uses owner-only, unencrypted files under ~/Library/Application Support/UniversalRemote/Credentials.
+This file has already been created. The directory is owner-only (700); the file is owner read/write (600). The entire directory is excluded by `.gitignore`. Keep keys and certificates there too. The file is **plain text on your Mac**, not encrypted; do not put it in a shared/synced directory or paste it into chat. App credentials use encrypted macOS Keychain when available; the development fallback uses owner-only, unencrypted files under ~/Library/Application Support/Farcast/Credentials.
 
 Open the file in your own editor. Fill in host, port, username and password, and set `enabled` to `true` for each server you want tested. For RDP, fill `domain` if required. Keep UUID `id` values stable and unique; when adding another server, generate a fresh UUID. Protocol values are exactly `SSH` or `RDP`. Disabled entries are ignored and can remain blank. The tracked `Tests/Fixtures/servers.example.json` has no real information; do not put secrets in that example.
 
@@ -33,15 +33,15 @@ The probe reads the protected local file in memory. Passwords are never process 
 To probe one explicitly authorized SSH entry and verify its SFTP directory access:
 
 ```sh
-UNIVERSALREMOTE_TEST_SERVER=1 UNIVERSALREMOTE_TEST_SFTP=1 scripts/test-live-servers.sh
+FARCAST_TEST_SERVER=1 FARCAST_TEST_SFTP=1 scripts/test-live-servers.sh
 ```
 
 This reads directory metadata without printing file names, reading file contents,
-transferring files or changing remote data. Add `UNIVERSALREMOTE_TEST_CONFIGURED=1`
+transferring files or changing remote data. Add `FARCAST_TEST_CONFIGURED=1`
 only when testing populated disabled entries is explicitly authorized. If an
 independently supplied public SHA256 host-key fingerprint is available separately,
-`UNIVERSALREMOTE_TEST_SSH_PIN` can supply it for the selected entry without editing
-the protected file. This override requires `UNIVERSALREMOTE_TEST_SERVER`; the
+`FARCAST_TEST_SSH_PIN` can supply it for the selected entry without editing
+the protected file. This override requires `FARCAST_TEST_SERVER`; the
 presented key must still match exactly. Never use an unverified network key.
 
 It returns a failure for identity, network, authentication or timeout failures. To investigate details, use the app locally; do not upload raw logs or screenshots with secrets. With all entries disabled, it reports **SKIP**, not successful real-server validation.
@@ -51,7 +51,7 @@ Synthetic tests remain separate under `.build`. They use loopback-only SSH/sampl
 The protected-file probe itself is covered by `scripts/test-live-fixtures.sh`: synthetic SSH/RDP success, selected SFTP/file-only access, supplied-pin matching, missing/non-SSH selections, mismatched SSH fingerprints and malformed ID rejection. It never reads the real credentials file.
 
 For an explicitly authorized test run of populated entries whose enabled flags are
-still false, use `UNIVERSALREMOTE_TEST_CONFIGURED=1 scripts/test-live-servers.sh`.
+still false, use `FARCAST_TEST_CONFIGURED=1 scripts/test-live-servers.sh`.
 This selects entries with populated host/username fields in memory only; the JSON
 is unchanged. All validation and SSH/untrusted-RDP pin requirements still apply.
 Blank disabled entries remain skipped. A missing SSH pin is a failure, and a

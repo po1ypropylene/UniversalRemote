@@ -54,7 +54,7 @@ try render("BrandMark") {
 }
 
 // A portable preview/fallback, distinct from the native layered document.
-try render("UniversalRemote-preview") {
+try render("Farcast-preview") {
     let tile = NSBezierPath(roundedRect: NSRect(x: 96, y: 96, width: 832, height: 832), xRadius: 186, yRadius: 186)
     NSGradient(colors: [
         NSColor(srgbRed: 0.28, green: 0.42, blue: 0.98, alpha: 1),

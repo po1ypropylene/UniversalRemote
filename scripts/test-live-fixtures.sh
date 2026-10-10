@@ -6,7 +6,7 @@ umask 077
 source scripts/test-support.sh live-fixtures
 mkdir -p "$fixture_root/ssh"
 rm -f "$fixture_root/ssh/port"
-python_bin="${UNIVERSALREMOTE_TEST_PYTHON:-.dependencies/test-venv/bin/python}"
+python_bin="${FARCAST_TEST_PYTHON:-.dependencies/test-venv/bin/python}"
 "$python_bin" Tests/Integration/SSH/ssh_fixture.py "$fixture_root/ssh" > "$fixture_root/ssh.log" 2>&1 &
 ssh_pid=$!
 fixture_pids+=("$!")
@@ -16,7 +16,7 @@ fixture_server="$PWD/.dependencies/rdp-fixture/build/server/Sample/sfreerdp-serv
 [[ -x "$fixture_server" ]] || scripts/prepare-rdp-fixture.sh
 Vendor/Native/bin/openssl req -config /dev/null -x509 -newkey rsa:2048 -nodes \
   -keyout "$fixture_root/key.pem" -out "$fixture_root/cert.pem" -days 1 -subj /CN=localhost > "$fixture_root/cert.log" 2>&1
-( cd "$(dirname "$fixture_server")"; exec env -u UNIVERSALREMOTE_FIXTURE_NLA -u UNIVERSALREMOTE_FIXTURE_SAM \
+( cd "$(dirname "$fixture_server")"; exec env -u FARCAST_FIXTURE_NLA -u FARCAST_FIXTURE_SAM \
   "$fixture_server" --port=33988 --cert="$fixture_root/cert.pem" --key="$fixture_root/key.pem" ) > "$fixture_root/rdp.log" 2>&1 &
 rdp_pid=$!
 fixture_pids+=("$!")
@@ -37,13 +37,13 @@ for name, entries in [('servers.json', [ssh, rdp]), ('wrong-pin.json', [dict(ssh
     (root/name).write_text(json.dumps(dict(schemaVersion=1, servers=entries)))
     os.chmod(root/name, 0o600)
 PY
-export UNIVERSALREMOTE_PROBE_CLIENT="$fixture_root/client"
+export FARCAST_PROBE_CLIENT="$fixture_root/client"
 scripts/test-live-servers.sh "$fixture_root/servers.json" > "$fixture_root/default-probe.log"
 rg -q '^PASS server 1 \(SSH\)' "$fixture_root/default-probe.log"
 rg -q '^PASS server 2 \(RDP\)' "$fixture_root/default-probe.log"
 cat "$fixture_root/default-probe.log"
 WLOG_LEVEL=OFF "$fixture_root/client" "$fixture_root/servers.json" --server=1 --sftp 2>/dev/null
-if WLOG_LEVEL=OFF UNIVERSALREMOTE_TEST_SSH_PIN=SHA256:wrong \
+if WLOG_LEVEL=OFF FARCAST_TEST_SSH_PIN=SHA256:wrong \
   "$fixture_root/client" "$fixture_root/servers.json" --server=1 --sftp > "$fixture_root/pin-override.log" 2>/dev/null; then
   echo 'FAIL live probe accepted a mismatched supplied pin.' >&2; exit 1
 fi
@@ -56,7 +56,7 @@ for negative in wrong-pin invalid; do
 done
 
 # A supplied public pin applies only to the selected entry; no credential-file edit.
-UNIVERSALREMOTE_TEST_SSH_PIN="$(cat "$fixture_root/ssh/fingerprint")" WLOG_LEVEL=OFF \
+FARCAST_TEST_SSH_PIN="$(cat "$fixture_root/ssh/fingerprint")" WLOG_LEVEL=OFF \
   "$fixture_root/client" "$fixture_root/wrong-pin.json" --server=1 --sftp 2>/dev/null
 for invalid_options in '--server=99' '--server=2 --sftp'; do
   if WLOG_LEVEL=OFF "$fixture_root/client" "$fixture_root/servers.json" $invalid_options > "$fixture_root/selector.log" 2>/dev/null; then

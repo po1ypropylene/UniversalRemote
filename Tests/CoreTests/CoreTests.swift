@@ -1,7 +1,7 @@
 import SwiftData
 import XCTest
 
-@testable import UniversalRemoteCore
+@testable import FarcastCore
 
 final class CoreTests: XCTestCase {
     func testValidationAndIPv6Normalization() {
@@ -113,7 +113,7 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(restored.privateKey, secret.privateKey)
     }
     @MainActor func testTrustStoreRequiresMatchingFingerprintAndCanForget() {
-        let name = "UniversalRemote.Tests.\(UUID())"
+        let name = "Farcast.Tests.\(UUID())"
         let defaults = UserDefaults(suiteName: name)!
         defer { defaults.removePersistentDomain(forName: name) }
         let store = TrustStore(defaults: defaults)

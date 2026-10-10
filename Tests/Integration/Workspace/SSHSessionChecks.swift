@@ -9,7 +9,7 @@ import Foundation
             let port = Int(CommandLine.arguments[1])
         else { exit(2) }
         _ = NSApplication.shared
-        let suite = "com.peterpo.UniversalRemote.SSHSessionTests.\(UUID().uuidString)"
+        let suite = "com.peterpo.farcast.SSHSessionTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         var lookups = 0

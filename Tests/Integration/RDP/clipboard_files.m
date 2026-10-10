@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
         channel.ClientFileContentsResponse = sendFileResponse;
         channel.ClientLockClipboardData = sendLock;
         channel.ClientUnlockClipboardData = sendUnlock;
-        URRDPClipboard *bridge = [URRDPClipboard new];
+        FCRDPClipboard *bridge = [FCRDPClipboard new];
         [bridge attach:&channel];
         __block NSArray<NSURL *> *received;
         __block NSString *message;

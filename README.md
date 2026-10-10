@@ -1,6 +1,6 @@
-# Universal Remote
+# Farcast
 
-<img src="docs/images/UniversalRemote-Icon.png" alt="Universal Remote app icon" width="128" height="128">
+<img src="docs/images/Farcast-Icon.png" alt="Farcast app icon" width="128" height="128">
 
 A native Mac workspace for SSH terminals, SFTP file transfers and RDP desktops.
 Keep saved connections and active sessions together in a tabbed SwiftUI interface.
@@ -16,30 +16,35 @@ This is an early preview. Local builds are ad-hoc signed and unnotarized.
 
 ## Screenshots
 
-![Universal Remote workspace and saved connections](docs/images/UniversalRemote-Home.png)
+Farcast used to be called Universal Remote. These screenshots show the previous
+name and will be updated later.
+
+![Farcast workspace and saved connections](docs/images/Farcast-Home.png)
 
 **SSH terminal**
 
-![SSH terminal and connection tabs](docs/images/UniversalRemote-SSH.png)
+![SSH terminal and connection tabs](docs/images/Farcast-SSH.png)
 
 **SFTP file transfer**
 
-![Local and remote SFTP file panels](docs/images/UniversalRemote-SFTP.png)
+![Local and remote SFTP file panels](docs/images/Farcast-SFTP.png)
 
 **Remote desktop**
 
-![RDP desktop session](docs/images/UniversalRemote-RDP.png)
+![RDP desktop session](docs/images/Farcast-RDP.png)
 
 **Connection editor**
 
-![Connection settings and WireGuard selection](docs/images/UniversalRemote-EditConnection.png)
+![Connection settings and WireGuard selection](docs/images/Farcast-EditConnection.png)
 
 ## Get started
 
-Open Universal Remote, choose **SSH Terminal**, **Remote Desktop**, or **Quick Connect**,
+Open Farcast, choose **SSH Terminal**, **Remote Desktop**, or **Quick Connect**,
 and enter your server details. Verify an unfamiliar server fingerprint before signing in.
 Save a profile for later or use Quick Connect for a single session.
 See the [user guide](docs/user-guide.md) for file transfers, settings and shortcuts.
+To bring an earlier library into Farcast, use **File → Import Existing Library…**;
+see [migration instructions](docs/user-guide.md#move-an-existing-library-to-farcast).
 
 Credentials use Keychain when available. The development fallback stores them in
 owner-only, **unencrypted local files**; saving screens explain this choice.
@@ -54,10 +59,10 @@ brew install cmake  # If needed
 xcodebuild -downloadComponent MetalToolchain  # If Xcode reports it missing
 scripts/prepare-dependencies.sh
 scripts/build.sh
-open ".build/Xcode/Build/Products/Release/Universal Remote.app"
+open ".build/Xcode/Build/Products/Release/Farcast.app"
 ```
 
-Or prepare dependencies, open `UniversalRemote.xcodeproj`, and Run. Allow the pinned
+Or prepare dependencies, open `Farcast.xcodeproj`, and Run. Allow the pinned
 SwiftTerm build plugin if Xcode requests approval.
 Dependency caches live in `.dependencies`, installed native libraries in `Vendor/Native`,
 and disposable outputs in `.build`. You can clear `.build` between builds.
@@ -69,4 +74,4 @@ and disposable outputs in `.build`. You can clear `.build` between builds.
 [Validation & known limits](docs/validation.md) · [Agent guide](AGENTS.md)
 
 Dependency versions and licenses are in [ThirdParty](ThirdParty/README.md).
-The license for Universal Remote's own source is still undecided.
+The license for Farcast's own source is still undecided.

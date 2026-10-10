@@ -4,6 +4,47 @@ Validation is evidence for the stated environment and scope, not a production
 compatibility guarantee. Repeatable commands and fixture ownership are in
 [testing](testing.md); signing requirements are in [packaging](packaging.md).
 
+## Farcast identity and library import — 11 October 2026
+
+- Renamed UI/permission/menu text, Xcode project/target/source/module, core package,
+  native adapter prefixes, WireGuard helper/module, scripts, docs and artifact names.
+  App/Keychain/helper identifiers use `com.peterpo.farcast`, `.credentials` and
+  `.wireguard`. The outer checkout/Git repository remain for the user to rename.
+  Screenshot/icon PNG bytes are unchanged; README explains the former screenshot name.
+- Version advances from 1.5.0 to 1.6.0 (build 1) for the rebrand and explicit migration
+  feature. A user-selected existing Library imports into an empty new sandbox.
+  Local credential copying requires opt-in; Keychain is never exported/copied.
+  Original data stays untouched, and app-specific folder grants need reselection.
+- Twenty-one core and 13 maintenance tests passed. A disposable old-module seed →
+  Farcast import → disk reopen preserved profile/folder/tunnel IDs, raw metadata,
+  dates/bookmarks, opted-in synthetic credentials, settings/trust/restoration and
+  byte-for-byte unchanged source input. Core tests cover nonempty-destination refusal,
+  credential opt-in, malformed credentials and symbolic-link refusal.
+- An isolated native preview used actual workspace/import views, in-memory metadata,
+  injected credentials and an owned old library. Visual/accessibility inspection
+  confirmed Farcast labels and credential disclosure; the native folder picker
+  imported a profile with its folder/tunnel displayed in the sidebar. Credential
+  copying was off; source hashes stayed unchanged. This preview was unsandboxed.
+  Actual user-container migration and persistent grants across signed Farcast
+  relaunches remain unverified.
+- Eighteen SSH, 75 SFTP, seven TLS RDP, eight NLA RDP, ten protected-probe synthetic
+  and 13 workspace checks passed. Native clipboard (78), private pasteboard (9),
+  folder-drive (55), keyboard/display and audio-backend checks passed. Race-enabled
+  WireGuard, encrypted synthetic RDP, native transport identity, sandboxed helper
+  lifecycle/shutdown and earlier-schema migration/reopening checks passed. The
+  lifecycle harness now links the real clipboard/drive adapters it requires.
+- Pinned dependency preparation, final Release and mounted-DMG verification passed:
+  Farcast names/lowercase identifiers, macOS 27/arm64, six-library closure, signatures,
+  sandbox/bookmark/network rights, loader and embedded-helper startup/cleanup.
+  `Farcast-1.6.0-build-1-arm64.dmg` and SHA256 were generated and verified. Configured
+  Swift/Objective-C formatting, shell syntax, local documentation links, repository
+  hygiene and whitespace checks passed.
+- No real servers, protected local input, user database/credential records, Keychain
+  or general clipboard contents were read. Preview processes/data/preferences and
+  test logs were removed. No commit, repository rename or publication occurred.
+  Developer ID signing/notarization, broader accessibility and production-server
+  interoperability remain pending as described below.
+
 ## Current cleanup, UI and workspace review — 10 October 2026
 
 - README reduced to an introduction, app icon/screenshots, getting started,

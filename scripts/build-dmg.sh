@@ -13,7 +13,7 @@ if [[ $# != 0 ]]; then
 fi
 
 scripts/build.sh
-app="$PWD/.build/Xcode/Build/Products/Release/Universal Remote.app"
+app="$PWD/.build/Xcode/Build/Products/Release/Farcast.app"
 # Derive the filename from the actual bundle, never from a second version source.
 release_name=$(python3 - "$app/Contents/Info.plist" <<'PY'
 import plistlib
@@ -26,7 +26,7 @@ version = info['CFBundleShortVersionString']
 build = info['CFBundleVersion']
 if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version) or not re.fullmatch(r'[1-9][0-9]*', build):
     raise SystemExit('Set a major.minor.patch version and a positive integer build in Version.xcconfig.')
-print(f'Universal-Remote-{version}-build-{build}-arm64')
+print(f'Farcast-{version}-build-{build}-arm64')
 PY
 )
 
@@ -47,14 +47,14 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 mkdir "$work/payload" "$work/mount"
-ditto "$app" "$work/payload/Universal Remote.app"
+ditto "$app" "$work/payload/Farcast.app"
 ln -s /Applications "$work/payload/Applications"
-diskutil image create from --volumeName "Universal Remote" --format UDZO \
+diskutil image create from --volumeName "Farcast" --format UDZO \
   "$work/payload" "$work/$release_name.dmg"
 hdiutil verify "$work/$release_name.dmg"
 diskutil image attach --readOnly --nobrowse --mountPoint "$work/mount" "$work/$release_name.dmg" >/dev/null
 mounted=1
-python3 scripts/verify-bundle.py "$work/mount/Universal Remote.app"
+python3 scripts/verify-bundle.py "$work/mount/Farcast.app"
 [[ "$(readlink "$work/mount/Applications")" == /Applications ]]
 diskutil eject "$work/mount" >/dev/null
 mounted=0

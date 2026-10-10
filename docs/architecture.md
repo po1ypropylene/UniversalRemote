@@ -2,7 +2,7 @@
 
 ## Platform and dependencies
 
-Universal Remote is a native SwiftUI app for macOS 27+ and arm64 only. Xcode,
+Farcast is a native SwiftUI app for macOS 27+ and arm64 only. Xcode,
 Package.swift and native builds share that minimum. SwiftData stores metadata;
 Security.framework provides Keychain and certificate trust. SwiftTerm handles
 terminal emulation, libssh2 SSH/SFTP, FreeRDP/WinPR RDP/NLA/channels, OpenSSL native
@@ -32,10 +32,12 @@ No runtime Homebrew, external protocol client or SSH agent is required.
 | Tests/CoreTests, Integration, Maintenance | Core, protocol/UI coordination and disposable script checks |
 | Tests/Fixtures | Blank disabled server-document example required by setup/import |
 
-App source folders are under UniversalRemote. Xcode's synchronized group includes
+App source folders are under Farcast. Xcode's synchronized group includes
 files there automatically; keep test-only tools/secrets outside it. Package.swift
 builds only Domain/Persistence/Shared. Preserve existing SwiftData entity/property
-identities and module/storage names; never reset the user's database during refactoring.
+identities; never reset the user's database during refactoring. The app module is
+Farcast, with separate lowercase bundle/storage identifiers. Explicit rename migration
+is described below.
 
 ## Session ownership and cancellation
 
@@ -77,7 +79,7 @@ wireGuardID and rdpDisplayMode preserve existing schema identities; absent/unkno
 modes use Fit. audioPlayback defaults true for older profiles. Credential coding retains
 compatibility when adding optional tunnel fields. Device-only Keychain stores secrets by
 UUID. When unavailable, owner-only unencrypted files under Library/Application Support/
-UniversalRemote/Credentials provide the disclosed development fallback (directory 700,
+Farcast/Credentials provide the disclosed development fallback (directory 700,
 files 600, atomic writes). Existing local records remain authoritative. Quick Connect
 never saves secrets/profiles; duplication does not copy credentials; profile deletion
 removes its credential item. No automatic Keychain export is used.
@@ -91,6 +93,28 @@ Test documents are bounded temporary secret-bearing input with redacted errors.
 Import creates new metadata in Test Servers, skips existing UUIDs, offers separate
 credential saving, and never connects or trusts imported fingerprints automatically.
 See [local testing](local-testing.md) for protected-input rules.
+
+### Explicit library migration
+
+Farcast uses `com.peterpo.farcast` and a new sandbox; it never silently opens or
+resets the previous library. File → Import Existing Library requires an empty
+destination and no session tabs. A user-selected Data/Library directory supplies
+the old default.store and journal companions, optional local credential files and
+an allowlisted preference subset. The previous app must be quit. Imports copy the
+database into an owner-only temporary tree before SwiftData opens it, because
+opening an original store can migrate/checkpoint it. Entity/property identities and
+all metadata IDs/raw optional values/dates are retained across the module rename.
+Original input remains untouched; symbolic-link components and oversized input fail
+closed, and errors omit input paths/values.
+
+Local secrets are copied only with explicit opt-in into Farcast's 700/600 atomic
+file store. Credential input is decoded before destination writes; credential writes
+are rolled back if metadata saving fails. An orphaned destination credential prevents
+replacement. Keychain contents are never copied or exported. Appearance, restoration
+and explicitly imported trust decisions are retained; unrelated preferences and old
+security-scoped grants are excluded. RDP export metadata remains but grants must be
+reselected when macOS refuses them. No sessions automatically connect. Historical
+bundle/path strings are restricted to migration recognition and test provenance.
 
 ## UI and desktop presentation
 

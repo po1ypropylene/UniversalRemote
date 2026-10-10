@@ -2,16 +2,16 @@
 import PackageDescription
 
 let package = Package(
-    name: "UniversalRemoteCore",
+    name: "farcast-core",
     platforms: [.macOS("27.0")],
-    products: [.library(name: "UniversalRemoteCore", targets: ["UniversalRemoteCore"])],
+    products: [.library(name: "farcast-core", targets: ["FarcastCore"])],
     targets: [
         .target(
-            name: "UniversalRemoteCore", path: "UniversalRemote",
+            name: "FarcastCore", path: "Farcast",
             exclude: ["App", "Features", "Protocols", "Native", "Native-Bridge.h", "Assets.xcassets", "AppIcon.icon"],
             sources: ["Domain", "Persistence", "Shared"]
         ),
-        .testTarget(name: "CoreTests", dependencies: ["UniversalRemoteCore"], path: "Tests/CoreTests"),
+        .testTarget(name: "CoreTests", dependencies: ["FarcastCore"], path: "Tests/CoreTests"),
     ],
     swiftLanguageModes: [.v5]
 )

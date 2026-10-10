@@ -7,10 +7,14 @@ import sys
 
 app = Path(sys.argv[1]).resolve()
 info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
+if any(info.get(key) != expected for key, expected in {
+        'CFBundleIdentifier': 'com.peterpo.farcast', 'CFBundleDisplayName': 'Farcast',
+        'CFBundleName': 'Farcast', 'CFBundleExecutable': 'Farcast'}.items()):
+    raise SystemExit('The final app must use the Farcast display name, executable and lowercase bundle identity.')
 if float(info.get('LSMinimumSystemVersion', '0').split('.')[0]) < 27:
     raise SystemExit('The app must require macOS 27 or later.')
 executable = app / 'Contents/MacOS' / info['CFBundleExecutable']
-if not (app / 'Contents/MacOS/UniversalRemoteWireGuard').is_file():
+if not (app / 'Contents/MacOS/FarcastWireGuard').is_file():
     raise SystemExit('Missing embedded WireGuard helper.')
 libraries = list((app / 'Contents/Frameworks').glob('*.dylib'))
 
@@ -61,15 +65,17 @@ if not all(parent_rights.get(key) is True for key in ['com.apple.security.app-sa
         'com.apple.security.network.client', 'com.apple.security.network.server',
         'com.apple.security.files.user-selected.read-write', 'com.apple.security.files.bookmarks.app-scope']):
     raise SystemExit('App must retain App Sandbox, network rights and selected-file/bookmark access.')
-helper_rights = entitlements(app / 'Contents/MacOS/UniversalRemoteWireGuard')
+helper_rights = entitlements(app / 'Contents/MacOS/FarcastWireGuard')
+if 'Identifier=com.peterpo.farcast.wireguard' not in signing(app / 'Contents/MacOS/FarcastWireGuard')[0].splitlines():
+    raise SystemExit('The embedded helper must use the lowercase Farcast signing identity.')
 expected_helper_rights = {'com.apple.security.app-sandbox': True, 'com.apple.security.inherit': True}
 if helper_rights != expected_helper_rights:
     raise SystemExit('WireGuard helper must have exactly the sandbox and inheritance entitlements.')
 # These exit before creating the connection library/UI and never load saved keys.
 result = subprocess.run([str(executable), '--verify-bundle-launch'], capture_output=True, text=True, timeout=15)
-if result.returncode != 0 or 'Universal Remote loader check passed' not in result.stdout:
+if result.returncode != 0 or 'Farcast loader check passed' not in result.stdout:
     raise SystemExit('Packaged app failed its loader check. Inspect local build diagnostics.')
 probe = subprocess.run([str(executable), '--verify-wireguard-helper'], capture_output=True, text=True, timeout=25)
-if probe.returncode != 0 or 'Universal Remote sandboxed WireGuard helper check passed' not in probe.stdout:
+if probe.returncode != 0 or 'Farcast sandboxed WireGuard helper check passed' not in probe.stdout:
     raise SystemExit('Packaged app failed its sandboxed WireGuard helper check. No real-server settings were used.')
 print(f'PASS bundle: macOS 27+, arm64, {len(libraries)} native libraries, signatures, loader and sandboxed WireGuard helper.')

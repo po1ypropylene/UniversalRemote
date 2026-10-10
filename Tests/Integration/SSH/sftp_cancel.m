@@ -14,8 +14,8 @@ int main(int argc, char **argv) {
             [[NSMutableData dataWithLength:32 * 1024 * 1024] writeToFile:local atomically:YES];
         else
             [[NSFileManager defaultManager] removeItemAtPath:local error:nil];
-        URSSHClient *client = [URSSHClient new];
-        __weak URSSHClient *weak = client;
+        FCSSHClient *client = [FCSSHClient new];
+        __weak FCSSHClient *weak = client;
         dispatch_semaphore_t ready = dispatch_semaphore_create(0), reply = dispatch_semaphore_create(0),
                              echo = dispatch_semaphore_create(0);
         dispatch_semaphore_t finished = dispatch_semaphore_create(0);

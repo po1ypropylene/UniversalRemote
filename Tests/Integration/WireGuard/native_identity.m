@@ -1,5 +1,5 @@
 // Exercise the real adapter's transport hook without a remote server.
-#import "../../../UniversalRemote/Native/RDP/RDPClient.m"
+#import "../../../Farcast/Native/RDP/RDPClient.m"
 static int peer = -1;
 static int calls = 0;
 static BYTE reply = 1;
@@ -19,18 +19,18 @@ static int fakeConnect(rdpContext *context, rdpSettings *settings, const char *h
 }
 int main(void) {
     @autoreleasepool {
-        URRDPClient *client = [URRDPClient new];
+        FCRDPClient *client = [FCRDPClient new];
         client.tunnelPort = 45678;
         client.tunnelToken = [@"" stringByPaddingToLength:64 withString:@"ab" startingAtIndex:0];
         RDP_CLIENT_ENTRY_POINTS ep = {0};
         ep.Size = sizeof(ep);
         ep.Version = RDP_CLIENT_INTERFACE_VERSION;
-        ep.ContextSize = sizeof(URContext);
+        ep.ContextSize = sizeof(FCContext);
         ep.ClientNew = clientNew;
         rdpContext *context = freerdp_client_context_new(&ep);
         if (!context)
             return 1;
-        URContext *ctx = (URContext *)context;
+        FCContext *ctx = (FCContext *)context;
         ctx->owner = (__bridge void *)client;
         ctx->identityHost = "private.example";
         ctx->identityPort = 3389;

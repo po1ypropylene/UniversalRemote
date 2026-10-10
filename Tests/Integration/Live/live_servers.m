@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
             } else
                 return 2;
         }
-        NSString *pinOverride = NSProcessInfo.processInfo.environment[@"UNIVERSALREMOTE_TEST_SSH_PIN"];
+        NSString *pinOverride = NSProcessInfo.processInfo.environment[@"FARCAST_TEST_SSH_PIN"];
         if (pinOverride && (!selectedServer || ![pinOverride hasPrefix:@"SHA256:"])) {
             puts("FAIL: a trusted SSH pin override requires one selected server.");
             return 2;
@@ -95,10 +95,10 @@ int main(int argc, char **argv) {
             BOOL (^trust)(NSString *, NSString *) = ^BOOL(NSString *fingerprint, NSString *details) {
               return pin.length > 0 && [fingerprint isEqualToString:pin];
             };
-            URSSHClient *sshClient = ssh ? [URSSHClient new] : nil;
-            URRDPClient *rdpClient = rdp ? [URRDPClient new] : nil;
-            __weak URSSHClient *weakSSH = sshClient;
-            __weak URRDPClient *weakRDP = rdpClient;
+            FCSSHClient *sshClient = ssh ? [FCSSHClient new] : nil;
+            FCRDPClient *rdpClient = rdp ? [FCRDPClient new] : nil;
+            __weak FCSSHClient *weakSSH = sshClient;
+            __weak FCRDPClient *weakRDP = rdpClient;
             void (^status)(NSString *, NSString *) = ^(NSString *state, NSString *message) {
               if ([state isEqualToString:@"verifying"])
                   stage = @"identity";

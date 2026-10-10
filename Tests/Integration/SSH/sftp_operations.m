@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
             return 2;
         NSString *root = @(argv[2]);
         NSString *pin = [NSString stringWithContentsOfFile:@(argv[3]) encoding:NSUTF8StringEncoding error:nil];
-        URSSHClient *client = [URSSHClient new];
+        FCSSHClient *client = [FCSSHClient new];
         dispatch_semaphore_t connected = dispatch_semaphore_create(0), response = dispatch_semaphore_create(0);
         __block NSDictionary *reply = nil;
         __block BOOL terminated = NO;

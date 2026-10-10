@@ -1,11 +1,35 @@
-# Using Universal Remote
+# Using Farcast
+
+## Move an existing library to Farcast
+
+Farcast has a new app identity and starts with its own library. The previous
+library and credentials stay in place; do not run a data-reset script to migrate.
+
+1. Quit the previous app. In Farcast, close all session tabs and use an empty
+   library. Import refuses to overwrite existing profiles, folders or tunnels.
+2. Choose **File → Import Existing Library…** (also available from **Add**).
+3. Enable **Copy saved local credentials** only if you want to copy passwords,
+   imported keys and WireGuard keys stored in local files. These copies remain
+   unencrypted, owner-only files. Keychain credentials are not copied.
+4. Choose **Choose Library Folder…**. In the macOS folder picker, press
+   **Command–Shift–G** and enter the previous container location:
+   `~/Library/Containers/com.peterpo.UniversalRemote/Data/Library`.
+   Select that **Library** directory, not Application Support or the repository.
+5. Saved profiles/folders/tunnels and their IDs, notes, dates, settings and prior
+   trust decisions are imported. Restored tabs stay disconnected. Enter any
+   Keychain credentials again and reselect local/shared folders when macOS asks.
+
+The importer opens a disposable copy of the database and leaves original files
+unchanged. It does not export Keychain, connect to servers or copy unrelated
+preferences. A rejected import preserves the original library; errors omit paths,
+server information and credential values.
 
 ## Open the app
 
 The local release build is at:
 
 ```text
-.build/Xcode/Build/Products/Release/Universal Remote.app
+.build/Xcode/Build/Products/Release/Farcast.app
 ```
 
 Open it directly, or copy the app to Applications. Its protocol libraries are
@@ -48,7 +72,7 @@ Session tabs can be reordered by dragging. Switching tabs does not reconnect or
 terminate their sessions. The toolbar provides reconnect, disconnect, full screen,
 and connection details. Closing a session disconnects it. Restored tabs remain
 disconnected until you choose Reconnect; ad hoc connections are not restored.
-Closing the last app window quits Universal Remote. Closing the window or choosing
+Closing the last app window quits Farcast. Closing the window or choosing
 Quit disconnects SSH/SFTP and RDP sessions and stops all embedded WireGuard tunnels
 before the app exits.
 
@@ -216,7 +240,7 @@ remains unverified.
   container. Passwords and private-key bytes are excluded from its schema.
 - Keychain stores credentials by connection UUID, with device-only accessibility.
   If unavailable, credentials use owner-only, unencrypted files in
-  `~/Library/Application Support/UniversalRemote/Credentials` (directory 700, files 600).
+  `~/Library/Application Support/Farcast/Credentials` (directory 700, files 600).
   Deleting a profile also deletes its credential item; duplicating a profile does
   not silently duplicate credentials.
 - UserDefaults stores appearance, restored tab IDs, and explicitly trusted server

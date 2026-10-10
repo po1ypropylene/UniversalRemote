@@ -7,4 +7,4 @@ export GOCACHE="$PWD/.dependencies/go/build" GOMODCACHE="$PWD/.dependencies/go/m
 cd Networking/WireGuard
 go mod verify
 CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 CGO_CFLAGS='-mmacosx-version-min=27.0' CGO_LDFLAGS='-mmacosx-version-min=27.0' \
- go build -trimpath -ldflags='-s -w -linkmode=external -extldflags=-mmacosx-version-min=27.0' -o ../../Vendor/Native/bin/UniversalRemoteWireGuard .
+ go build -trimpath -ldflags='-s -w -linkmode=external -extldflags=-mmacosx-version-min=27.0' -o ../../Vendor/Native/bin/FarcastWireGuard .

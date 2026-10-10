@@ -9,14 +9,14 @@ int main(int argc, char **argv) {
         NSString *mode = @(argv[1]);
         int port = atoi(argv[2]);
         NSString *keyPath = @(argv[3]);
-        URSSHClient *client = [URSSHClient new];
+        FCSSHClient *client = [FCSSHClient new];
         dispatch_semaphore_t done = dispatch_semaphore_create(0);
         __block BOOL trusted = NO, connected = NO, failed = NO, verifiedInput = NO, resized = NO;
         __block int prompts = 0;
         NSMutableString *received = [NSMutableString new];
         __block BOOL sentExit = NO, shellEnded = NO;
         __block BOOL credentialsRejected = NO;
-        __weak URSSHClient *weakClient = client;
+        __weak FCSSHClient *weakClient = client;
         client.onTerminalAvailability = ^(BOOL available) {
           if (!available && sentExit) {
               shellEnded = YES;
@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
              authentication:authentication];
         BOOL timedOut = dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC)) != 0;
         [client disconnect];
-        [URSSHClient whenAllDisconnected:^{
+        [FCSSHClient whenAllDisconnected:^{
           dispatch_semaphore_signal(done);
         }];
         BOOL drained = dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0;

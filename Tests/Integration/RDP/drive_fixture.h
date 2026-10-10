@@ -5,13 +5,13 @@ typedef struct {
     BOOL readOnly;
     int phase;
     testPeerContext *peer;
-} URDriveFixture;
-static void ur_drive_finish(RdpdrServerContext *c) {
-    URDriveFixture *state = c->data;
-    CliprdrServerContext *clip = state->peer->ur_clipboard;
+} FCDriveFixture;
+static void fc_drive_finish(RdpdrServerContext *c) {
+    FCDriveFixture *state = c->data;
+    CliprdrServerContext *clip = state->peer->fc_clipboard;
     if (!clip)
         return;
-    URFixtureClipboard *clipboard = clip->custom;
+    FCFixtureClipboard *clipboard = clip->custom;
     const char *text = "Synthetic redirected drive passed";
     size_t length = strlen(text);
     free(clipboard->bytes);
@@ -26,23 +26,23 @@ static void ur_drive_finish(RdpdrServerContext *c) {
     list.formats = &format;
     clip->ServerFormatList(clip, &list);
 }
-static void ur_drive_closed(RdpdrServerContext *c, void *data, UINT32 status) {
+static void fc_drive_closed(RdpdrServerContext *c, void *data, UINT32 status) {
     if (!status)
-        ur_drive_finish(c);
+        fc_drive_finish(c);
 }
-static void ur_drive_read(RdpdrServerContext *c, void *data, UINT32 status, const char *bytes, UINT32 length) {
-    URDriveFixture *state = c->data;
+static void fc_drive_read(RdpdrServerContext *c, void *data, UINT32 status, const char *bytes, UINT32 length) {
+    FCDriveFixture *state = c->data;
     const char *expected = state->readOnly ? "initial fixture" : "written fixture";
     if (!status && length == strlen(expected) && !memcmp(bytes, expected, length))
         c->DriveCloseFile(c, state, state->device, state->file);
 }
-static void ur_drive_written(RdpdrServerContext *c, void *data, UINT32 status, UINT32 length) {
-    URDriveFixture *state = c->data;
+static void fc_drive_written(RdpdrServerContext *c, void *data, UINT32 status, UINT32 length) {
+    FCDriveFixture *state = c->data;
     if (!status && length == 15)
         c->DriveReadFile(c, state, state->device, state->file, 15, 0);
 }
-static void ur_drive_opened(RdpdrServerContext *c, void *data, UINT32 status, UINT32 device, UINT32 file) {
-    URDriveFixture *state = c->data;
+static void fc_drive_opened(RdpdrServerContext *c, void *data, UINT32 status, UINT32 device, UINT32 file) {
+    FCDriveFixture *state = c->data;
     if (state->readOnly && state->phase == 0) {
         if (status != STATUS_ACCESS_DENIED)
             return;
@@ -58,41 +58,41 @@ static void ur_drive_opened(RdpdrServerContext *c, void *data, UINT32 status, UI
     else
         c->DriveWriteFile(c, state, device, file, "written fixture", 15, 0);
 }
-static UINT ur_drive_created(RdpdrServerContext *c, const RdpdrDevice *device) {
-    URDriveFixture *state = c->data;
+static UINT fc_drive_created(RdpdrServerContext *c, const RdpdrDevice *device) {
+    FCDriveFixture *state = c->data;
     state->device = device->DeviceId;
     const BYTE readonlyName[] = {'R', 0, 'e', 0, 'a', 0, 'd', 0, 'O', 0, 'n', 0, 'l', 0, 'y', 0};
     state->readOnly = device->DeviceDataLength >= sizeof(readonlyName) &&
                       !memcmp(device->DeviceData, readonlyName, sizeof(readonlyName));
     return c->DriveOpenFile(c, state, state->device, "\\probe.bin", GENERIC_WRITE | GENERIC_READ, FILE_OPEN);
 }
-static BOOL ur_fixture_drive_start(testPeerContext *peer) {
+static BOOL fc_fixture_drive_start(testPeerContext *peer) {
     if (!WTSVirtualChannelManagerIsChannelJoined(peer->vcm, "rdpdr"))
         return TRUE;
     RdpdrServerContext *c = rdpdr_server_context_new(peer->vcm);
     if (!c)
         return FALSE;
-    peer->ur_drive = c;
+    peer->fc_drive = c;
     c->rdpcontext = &peer->_p;
     c->supported = RDPDR_DTYP_FILESYSTEM;
-    URDriveFixture *state = calloc(1, sizeof(*state));
+    FCDriveFixture *state = calloc(1, sizeof(*state));
     if (!state)
         return FALSE;
     state->peer = peer;
     c->data = state;
-    c->OnDriveCreate = ur_drive_created;
-    c->OnDriveOpenFileComplete = ur_drive_opened;
-    c->OnDriveReadFileComplete = ur_drive_read;
-    c->OnDriveWriteFileComplete = ur_drive_written;
-    c->OnDriveCloseFileComplete = ur_drive_closed;
+    c->OnDriveCreate = fc_drive_created;
+    c->OnDriveOpenFileComplete = fc_drive_opened;
+    c->OnDriveReadFileComplete = fc_drive_read;
+    c->OnDriveWriteFileComplete = fc_drive_written;
+    c->OnDriveCloseFileComplete = fc_drive_closed;
     return c->Start(c) == 0;
 }
-static void ur_fixture_drive_stop(testPeerContext *peer) {
-    RdpdrServerContext *c = peer->ur_drive;
+static void fc_fixture_drive_stop(testPeerContext *peer) {
+    RdpdrServerContext *c = peer->fc_drive;
     if (!c)
         return;
     c->Stop(c);
     free(c->data);
     rdpdr_server_context_free(c);
-    peer->ur_drive = NULL;
+    peer->fc_drive = NULL;
 }

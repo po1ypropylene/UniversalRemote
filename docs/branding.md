@@ -1,8 +1,23 @@
-# Universal Remote identity
+# Farcast identity
 
-The official displayed app name is **Universal Remote**. Window/sidebar titles, alerts, permission text, macOS app menus and the built `Universal Remote.app` use that spelling. Internal project/target and module names remain `UniversalRemote`; the module name is explicit so adding a space to the product name does not change SwiftData's model identity. Bundle identifiers, Keychain services and storage paths also remain stable, preserving existing profiles and credentials. The outer repository checkout can be renamed independently; scripts resolve the repository root from their own paths.
+The official app name is **Farcast**. Window/sidebar titles, alerts, permission text,
+macOS app menus, Xcode project/target/source folder and the built `Farcast.app` use
+that spelling. The Swift module is `Farcast`, the core package/product is
+`farcast-core` (Swift target `FarcastCore`), and the embedded executable is
+`FarcastWireGuard`. Package identifiers use lowercase:
+`com.peterpo.farcast`, `com.peterpo.farcast.credentials`,
+`com.peterpo.farcast.wireguard` and Go module `com.peterpo.farcast/wireguard`.
+Scripts resolve the outer repository root from their own paths, so its folder
+and Git repository can be renamed independently.
 
-The bundle identifier is `com.peterpo.UniversalRemote` and the Keychain service is `com.peterpo.UniversalRemote.credentials`. The rebrand uses a new macOS app container and credential namespace. Pre-rebrand data is left untouched; saved connections can be reimported from the protected local file, and credentials must be saved in the new namespace. There is no automatic Keychain export or hidden migration of secrets.
+The new identity uses a separate macOS sandbox and credential namespace. Previous
+data stays untouched. **File → Import Existing Library…** explicitly imports a
+user-selected prior library into an empty Farcast library, preserving profile,
+folder and WireGuard IDs and metadata. Copying local credentials requires opt-in;
+Keychain items are never exported/copied. Existing Keychain credentials must be
+entered again, and app-specific folder grants need reselection. Historical identity
+strings exist only in migration input recognition and regression fixtures.
+See [the migration workflow](user-guide.md#move-an-existing-library-to-farcast).
 
 After renaming the outer checkout, follow the cache relocation instructions in [development](development.md), then run `scripts/build.sh` to rebuild. Compiler caches and native install prefixes retain absolute checkout paths. Keep `.local-testing` intact. The already packaged app is self-contained and keeps working after a folder move.
 
@@ -14,8 +29,10 @@ The editable app icon is a native Icon Composer document. macOS supplies the ico
 
 Run scripts/update-icon-artwork.sh to regenerate the original layers and sidebar glyph using scripts/generate-icon.swift; run scripts/export-icon.sh for previews. Icon Composer remains the editable source of truth for materials and layering. Generated preview images are stored under .build and are not app runtime assets.
 
-README uses the screenshots supplied in `docs/images` and a 512×512 PNG rendered
-from the Default macOS appearance of `UniversalRemote/AppIcon.icon`. Regenerate
-`docs/images/UniversalRemote-Icon.png` with `scripts/export-icon.sh --readme` after
+README retains the supplied screenshots in `docs/images`. Their contents show the
+previous name until updated; README explains that history. Filenames and references
+use Farcast. Its 512×512 icon PNG is rendered from the Default macOS appearance of
+`Farcast/AppIcon.icon`. Regenerate
+`docs/images/Farcast-Icon.png` with `scripts/export-icon.sh --readme` after
 editing the icon. The README displays it at 128×128; the Icon Composer document
 remains the source of truth.
