@@ -160,18 +160,42 @@ remains unverified.
   ordinary scrolling goes to Windows. Display changes apply after reconnecting.
 - Mouse, keyboard, scrolling, remote cursor, Unicode text input, and
   **Ctrl + Alt + Delete**.
-- Optional text clipboard sharing while the session is selected. It defaults off.
-  Enable **Share text clipboard** under **Sharing & server identity**, save and
+- Optional text, file and folder clipboard sharing while the session is selected. It defaults off.
+  Enable **Share text and files clipboard** under **Sharing & server identity**, save and
   reconnect. Use Command+C / Command+V or Control+C / Control+V inside Windows.
   Command+C/X/V/A map to Windows Control shortcuts; otherwise Command maps to the Windows key;
   app shortcuts such as Command+W and Command+Q remain local.
+  Copy files/folders in Finder and paste into Windows Explorer, or copy in Explorer
+  and paste into Finder. Windows-to-Mac files download first; the desktop status
+  reports when they are ready. Only complete batches enter the Mac clipboard.
+  Transfers always copy; they do not delete the sources, even when Cut is used.
+  The server must permit file clipboard redirection. Local files need readable
+  access and Windows-compatible names; symbolic links and special files are refused.
+  Remote temporary storage is limited to 8 GiB and 20,000 entries per batch.
+  Copying something else, switching tabs or disconnecting cancels an unfinished
+  download. Once ready, completed files remain available after disconnect while the app
+  remains open and the clipboard owns them. Keep the app open until Finder finishes
+  copying; these temporary files are not permanent storage. Last-write timestamps
+  are preserved.
+- Configure **Redirect local folders** under **Sharing & server identity**. Use
+  **Add local folders…**, choose the Mac folders, give each a unique drive name,
+  save and reconnect. Windows exposes them in **This PC** and at
+  `\\tsclient\DriveName`; no drive letter is assigned automatically. You can map that
+  path to a drive letter using Windows Explorer if desired.
+  **Read-only** defaults on. Turning it off allows the server to create, change,
+  rename and delete the selected Mac folder's contents directly. No other Mac
+  folders are automatically shared. **Choose another folder…** repairs unavailable
+  access; **Remove** stops exporting it after reconnect. The server must permit
+  drive redirection, independently of the clipboard setting. Symlinks/special files
+  are unavailable, and advanced Windows filesystem features such as change
+  notifications, byte-range locks and ACL editing are unsupported.
 - Remote sound plays through this Mac by default. Turn off **Play remote sound on
   this Mac** under **Sharing & server identity** to mute it after reconnecting.
   The server must allow audio playback redirection. Microphone sharing is unavailable.
 - US physical scan-code layout plus Unicode text input. Additional physical
   keyboard layouts, advanced IME behavior, multi-monitor support, hardware video
-  decoding, microphone capture, RD Gateway, RemoteApp, smart cards, printers, and drive/file
-  redirection are not included in this release.
+  decoding, microphone capture, RD Gateway, RemoteApp, smart cards and printers
+  are not included in this release.
 
 ## Shortcuts
 

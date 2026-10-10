@@ -1,5 +1,6 @@
 #import "RDPClient.h"
 #import <Foundation/Foundation.h>
+#import <math.h>
 int main(int argc, char **argv) {
     @autoreleasepool {
         if (argc < 3)
@@ -16,13 +17,78 @@ int main(int argc, char **argv) {
         dispatch_semaphore_t done = dispatch_semaphore_create(0);
         __block BOOL trusted = NO, connected = NO, failed = NO, frame = NO;
         BOOL clipboardTest = [mode isEqualToString:@"clipboard"];
+        BOOL driveTest = [mode hasPrefix:@"drive"];
+        __block BOOL drivePassed = NO;
+        BOOL fileTest = [mode isEqualToString:@"files"];
+        __block BOOL filesPassed = NO;
+        __block URRDPClipboardFileBatch *receivedBatch = nil;
+        NSURL *source = nil;
+        NSMutableData *fileBytes = [NSMutableData dataWithLength:700123];
+        for (NSUInteger i = 0; i < fileBytes.length; i++)
+            ((uint8_t *)fileBytes.mutableBytes)[i] = (uint8_t)(i * 31);
+        if (fileTest) {
+            source = [[NSURL fileURLWithPath:NSProcessInfo.processInfo.environment[@"UNIVERSALREMOTE_RDP_CONFIG"]]
+                URLByAppendingPathComponent:@"Clipboard folder"];
+            [[NSFileManager defaultManager] createDirectoryAtURL:[source URLByAppendingPathComponent:@"Nested"]
+                                     withIntermediateDirectories:YES
+                                                      attributes:nil
+                                                           error:NULL];
+            [fileBytes writeToURL:[source URLByAppendingPathComponent:@"Nested/繁體😀.bin"] atomically:YES];
+            [NSData.data writeToURL:[source URLByAppendingPathComponent:@"Empty"] atomically:YES];
+            [NSFileManager.defaultManager
+                setAttributes:@{NSFileModificationDate : [NSDate dateWithTimeIntervalSince1970:946684800]}
+                 ofItemAtPath:[source URLByAppendingPathComponent:@"Nested/繁體😀.bin"].path
+                        error:NULL];
+            client.onClipboardBatch = ^(URRDPClipboardFileBatch *batch) {
+              receivedBatch = batch;
+              NSArray<NSURL *> *files = batch.files;
+              filesPassed =
+                  files.count == 1 &&
+                  [[NSData dataWithContentsOfURL:[files.firstObject URLByAppendingPathComponent:@"Nested/繁體😀.bin"]]
+                      isEqual:fileBytes] &&
+                  [NSFileManager.defaultManager
+                      fileExistsAtPath:[files.firstObject URLByAppendingPathComponent:@"Empty"].path];
+              [weakClient disconnect];
+            };
+        }
         NSArray<NSString *> *samples = @[ @"Synthetic clipboard 繁體中文 😀\r\nSecond line", @"Updated fixture", @"" ];
         __block NSUInteger clipboardCount = 0;
+        NSURL *exportURL = nil;
+        if (driveTest) {
+            exportURL = [[NSURL fileURLWithPath:NSProcessInfo.processInfo.environment[@"UNIVERSALREMOTE_RDP_CONFIG"]]
+                URLByAppendingPathComponent:@"Redirected"];
+            [NSFileManager.defaultManager createDirectoryAtURL:exportURL
+                                   withIntermediateDirectories:YES
+                                                    attributes:nil
+                                                         error:NULL];
+            NSError *writeError = nil;
+            BOOL initialized = [[@"initial fixture" dataUsingEncoding:NSUTF8StringEncoding]
+                writeToURL:[exportURL URLByAppendingPathComponent:@"probe.bin"]
+                   options:NSDataWritingAtomic
+                     error:&writeError];
+            if (!initialized) {
+                fprintf(stderr, "FAIL synthetic drive initialization (%ld)\n", (long)writeError.code);
+                return 1;
+            }
+            NSData *bookmark = [exportURL bookmarkDataWithOptions:NSURLBookmarkCreationWithSecurityScope
+                                   includingResourceValuesForKeys:nil
+                                                    relativeToURL:nil
+                                                            error:NULL];
+            client.redirectedFolders = @[ @{
+                @"name" : [mode isEqualToString:@"drive-ro"] ? @"ReadOnly" : @"Writable",
+                @"bookmark" : bookmark,
+                @"readOnly" : @([mode isEqualToString:@"drive-ro"])
+            } ];
+        }
         client.onTrust = ^BOOL(NSString *fingerprint, NSString *details) {
           trusted = [fingerprint hasPrefix:@"SHA256:"];
           return ![mode isEqualToString:@"reject"];
         };
         client.onClipboard = ^(NSString *text) {
+          if (driveTest && [text isEqualToString:@"Synthetic redirected drive passed"]) {
+              drivePassed = YES;
+              [weakClient disconnect];
+          }
           if (clipboardTest && clipboardCount < samples.count && [text isEqualToString:samples[clipboardCount]]) {
               clipboardCount++;
               if (clipboardCount < samples.count)
@@ -35,7 +101,7 @@ int main(int argc, char **argv) {
         };
         client.onFrame = ^(NSData *pixels, NSInteger w, NSInteger h, NSInteger stride) {
           frame = pixels.length == stride * h && w > 0 && h > 0;
-          if (frame && (!clipboardTest || clipboardCount == samples.count))
+          if (frame && !driveTest && !fileTest && (!clipboardTest || clipboardCount == samples.count))
               [weakClient disconnect];
         };
         client.onStatus = ^(NSString *state, NSString *message) {
@@ -56,6 +122,8 @@ int main(int argc, char **argv) {
         };
         if (clipboardTest)
             [client setClipboardText:samples[0]];
+        if (fileTest)
+            [client setClipboardFiles:@[ source ]];
         [client connectHost:(tunnelPort ? @"10.111.0.1" : @"127.0.0.1")
                        port:port
                    username:@"fixture"
@@ -78,6 +146,23 @@ int main(int argc, char **argv) {
             pass = pass && connected && !failed && ([mode isEqualToString:@"cancel"] || frame);
         if (clipboardTest)
             pass = pass && clipboardCount == samples.count;
+        if (fileTest) {
+            NSURL *file = [receivedBatch.files.firstObject URLByAppendingPathComponent:@"Nested/繁體😀.bin"];
+            NSDate *modified = [NSFileManager.defaultManager attributesOfItemAtPath:file.path
+                                                                              error:NULL][NSFileModificationDate];
+            pass = pass && filesPassed && [[NSData dataWithContentsOfURL:file] isEqual:fileBytes] &&
+                   fabs(modified.timeIntervalSince1970 - 946684800) < 1;
+            // This batch was created by this synthetic client, never a user path.
+            NSURL *stage = receivedBatch.files.firstObject.URLByDeletingLastPathComponent;
+            if ([stage.lastPathComponent hasPrefix:@"UniversalRemote-RDP-"])
+                [NSFileManager.defaultManager removeItemAtURL:stage error:NULL];
+        }
+        if (driveTest) {
+            NSString *expected = [mode isEqualToString:@"drive-ro"] ? @"initial fixture" : @"written fixture";
+            BOOL unchanged = [[NSData dataWithContentsOfURL:[exportURL URLByAppendingPathComponent:@"probe.bin"]]
+                isEqual:[expected dataUsingEncoding:NSUTF8StringEncoding]];
+            pass = pass && drivePassed && unchanged;
+        }
         printf("%s RDP %s (trust=%d connected=%d frame=%d)\n", pass ? "PASS" : "FAIL", mode.UTF8String, trusted,
                connected, frame);
         return pass ? 0 : 1;

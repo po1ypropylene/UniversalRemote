@@ -13,6 +13,8 @@ scripts/test-sftp-throughput.sh
 # Build an isolated, loopback-only synthetic RDP server.
 scripts/prepare-rdp-fixture.sh
 scripts/test-rdp.sh
+scripts/test-rdp-files.sh
+scripts/test-rdp-drives.sh
 scripts/test-rdp-nla.sh
 scripts/test-rdp-audio.sh
 scripts/test-rdp-keyboard.sh
@@ -47,10 +49,27 @@ an upstream sample desktop, not the user's screen, and checks TLS trust decision
 framebuffer delivery, and cancellation. It can also enable NLA with a synthetic
 SAM file through `UNIVERSALREMOTE_FIXTURE_NLA` and `UNIVERSALREMOTE_FIXTURE_SAM`.
 The disposable RDP fixture also echoes synthetic Unicode clipboard text through
-the actual clipboard channel, including updates and clearing. The audio test opens
+the actual clipboard channel, including updates and clearing. It also relays file
+lists/locks/ranges in both directions for nested folders, Unicode names, binary
+payloads larger than one chunk and empty files. `test-rdp-files.sh` checks file
+codec/access/cancellation against a deterministic channel, 64-bit sparse-file ranges,
+malformed paths and quotas, and uses private named pasteboards to test publication,
+feedback suppression and newer-copy preservation. A separate disposable signed sandboxed app check verified access to an owned
+external file through a private pasteboard without broad filesystem entitlements.
+No test reads the general pasteboard. Actual Finder paste and production-server file policies remain separate
+manual interoperability checks. The audio test opens
 the Mac output device and plays silence; the keyboard test uses synthetic events.
 These tests never read the user's clipboard. Audible playback from a real server
 still needs verification.
+`test-rdp-drives.sh` verifies owned-root filesystem requests, read-only denial,
+64-bit sparse offsets, metadata, pagination, rename/delete, malformed input and
+link/traversal refusal. TLS/NLA peers exercise actual RDPDR drive announcements,
+open/write/read/close and denied write opens followed by successful read-only
+reads, checking local bytes afterward. The disposable server copy corrects its
+write-completion decoder to read only the specified count/padding; production
+FreeRDP libraries remain unchanged. `test-wireguard-migration.sh` also verifies
+adding optional redirected-folder metadata to an existing synthetic library and
+reopening it. None of these checks mounts or changes a real user's folder.
 Fixture processes are stopped when their harness exits.
 
 See [validation](validation.md) for completed checks and remaining release validation.

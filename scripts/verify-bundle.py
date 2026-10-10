@@ -58,8 +58,9 @@ def entitlements(path):
     return plistlib.loads(result.stdout) if result.stdout else {}
 parent_rights = entitlements(executable)
 if not all(parent_rights.get(key) is True for key in ['com.apple.security.app-sandbox',
-        'com.apple.security.network.client', 'com.apple.security.network.server']):
-    raise SystemExit('App must retain App Sandbox and both network permissions for embedded WireGuard.')
+        'com.apple.security.network.client', 'com.apple.security.network.server',
+        'com.apple.security.files.user-selected.read-write', 'com.apple.security.files.bookmarks.app-scope']):
+    raise SystemExit('App must retain App Sandbox, network rights and selected-file/bookmark access.')
 helper_rights = entitlements(app / 'Contents/MacOS/UniversalRemoteWireGuard')
 expected_helper_rights = {'com.apple.security.app-sandbox': True, 'com.apple.security.inherit': True}
 if helper_rights != expected_helper_rights:

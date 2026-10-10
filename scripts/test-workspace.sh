@@ -25,12 +25,18 @@ for protocol in SSH RDP; do
     -I Vendor/Native/include/freerdp3 -I Vendor/Native/include/winpr3 \
     -c "UniversalRemote/Native/$protocol/${protocol}Client.m" -o "$fixture_root/$protocol.o"
 done
+xcrun clang -fobjc-arc -mmacosx-version-min=27.0 -I Vendor/Native/include \
+  -I Vendor/Native/include/freerdp3 -I Vendor/Native/include/winpr3 \
+  -c UniversalRemote/Native/RDP/RDPClipboard.m -o "$fixture_root/RDPClipboard.o"
+xcrun clang -fobjc-arc -mmacosx-version-min=27.0 -I Vendor/Native/include \
+  -I Vendor/Native/include/freerdp3 -I Vendor/Native/include/winpr3 \
+  -c UniversalRemote/Native/RDP/RDPDrive.m -o "$fixture_root/RDPDrive.o"
 session_sources=()
 while IFS= read -r source; do session_sources+=("$source"); done < <(rg --files UniversalRemote -g '*.swift' | rg -v '^UniversalRemote/App/' | sort)
 xcrun swiftc -parse-as-library -module-name UniversalRemote -target arm64-apple-macos27.0 \
   -I "$products" -import-objc-header UniversalRemote/Native-Bridge.h \
   "${session_sources[@]}" Tests/Integration/Workspace/SSHSessionChecks.swift \
-  "$fixture_root/SSH.o" "$fixture_root/RDP.o" "$products/SwiftTerm.o" \
+  "$fixture_root/SSH.o" "$fixture_root/RDP.o" "$fixture_root/RDPClipboard.o" "$fixture_root/RDPDrive.o" "$products/SwiftTerm.o" \
   -L Vendor/Native/lib -lssh2 -lfreerdp3 -lfreerdp-client3 -lwinpr3 -lcrypto \
   -Xlinker -rpath -Xlinker "$PWD/Vendor/Native/lib" -o "$fixture_root/ssh-session-client"
 "$fixture_root/ssh-session-client" "$(cat "$fixture_root/port")" "$fixture_root/fingerprint"

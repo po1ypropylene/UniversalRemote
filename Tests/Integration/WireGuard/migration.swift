@@ -34,21 +34,31 @@ import SwiftData
                 saved.folderID == folders[0].id
             else { throw WireGuardError.unavailable }
             if CommandLine.arguments.count == 2 {
-                guard saved.wireGuardID == nil, saved.rdpDisplayMode == nil, ConnectionDraft(saved).displayMode == .fit
+                guard saved.wireGuardID == nil, saved.rdpDisplayMode == nil, saved.rdpFolderExports == nil,
+                    ConnectionDraft(saved).redirectedFolders.isEmpty, ConnectionDraft(saved).displayMode == .fit
                 else { throw WireGuardError.unavailable }
                 let tunnel = try SavedWireGuard(
                     name: "Synthetic migrated tunnel", configuration: WireGuardConfiguration())
                 container.mainContext.insert(tunnel)
                 saved.wireGuardID = tunnel.id
                 saved.rdpDisplayMode = RDPDisplayMode.actualSize.rawValue
+                saved.rdpFolderExports = try JSONEncoder().encode([
+                    RDPFolderExport(name: "Migrated files", bookmark: Data([1, 2, 3]), readOnly: true)
+                ])
                 try container.mainContext.save()
                 print("PASS existing SwiftData library migrated with profiles/folders/settings preserved")
             } else {
                 let tunnels = try container.mainContext.fetch(FetchDescriptor<SavedWireGuard>())
                 guard tunnels.count == 1, saved.wireGuardID == tunnels[0].id,
-                    ConnectionDraft(saved).displayMode == .actualSize
+                    ConnectionDraft(saved).displayMode == .actualSize,
+                    ConnectionDraft(saved).redirectedFolders == [
+                        RDPFolderExport(
+                            id: ConnectionDraft(saved).redirectedFolders.first!.id, name: "Migrated files",
+                            bookmark: Data([1, 2, 3]), readOnly: true)
+                    ]
                 else { throw WireGuardError.unavailable }
-                print("PASS migrated library reopened with saved WireGuard and RDP display selections")
+                print(
+                    "PASS migrated library reopened with saved WireGuard, RDP display and redirected-folder selections")
             }
         #endif
     }

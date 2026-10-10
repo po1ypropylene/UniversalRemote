@@ -25,8 +25,20 @@ import SwiftTerm
     private var pendingWaiters: [PromptWaiter] = []
     private var generation = UUID()
     private var clipboardTimer: Timer?
-    private var clipboardChange = -1
-    var isSelected = false
+    @Published private(set) var clipboardMessage = ""
+    private let clipboardBridge = RDPClipboardBridge()
+    var isSelected = false {
+        didSet {
+            guard isSelected != oldValue else { return }
+            rdp?.setClipboardActive(isSelected)
+            if isSelected {
+                clipboardBridge.reset()
+            } else {
+                clipboardBridge.invalidate()
+                clipboardMessage = ""
+            }
+        }
+    }
     weak var workspace: Workspace?
 
     init(profile: ConnectionDraft, workspace: Workspace, persistent: Bool = true, files: SFTPController? = nil) {
@@ -47,6 +59,13 @@ import SwiftTerm
     }
     func start(credential: ConnectionCredential) {
         guard workspace?.isShuttingDown != true else { return }
+        if profile.kind == .rdp && profile.redirectedFoldersUnavailable {
+            update(
+                "failed",
+                message: "Saved folder settings are unavailable. Edit the connection and choose the folders again.",
+                attempt: generation)
+            return
+        }
         guard profile.kind == .rdp, let tunnelID = profile.wireGuardID else {
             startProtocol(credential: credential)
             return
@@ -181,6 +200,10 @@ import SwiftTerm
         } else if let desktop {
             let client = URRDPClient()
             rdp = client
+            client.redirectedFolders = profile.redirectedFolders.map {
+                ["name": $0.name, "bookmark": $0.bookmark, "readOnly": $0.readOnly] as [String: Any]
+            }
+            client.setClipboardActive(isSelected)
             client.tunnelPort = tunnelPort
             client.tunnelToken = tunnelToken
             client.onStatus = { [weak self] status, message in
@@ -200,9 +223,31 @@ import SwiftTerm
                     guard let self, self.generation == attempt, self.state == .connected, self.profile.clipboard,
                         self.isSelected
                     else { return }
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(text, forType: .string)
-                    self.clipboardChange = NSPasteboard.general.changeCount
+                    self.clipboardBridge.receive(text: text)
+                }
+            }
+            client.onClipboardChange = { [weak self] in
+                DispatchQueue.main.async {
+                    guard let self, self.generation == attempt, self.state == .connected,
+                        self.profile.clipboard, self.isSelected
+                    else { return }
+                    self.clipboardBridge.remoteChanged()
+                }
+            }
+            client.onClipboardBatch = { [weak self] batch in
+                DispatchQueue.main.async {
+                    guard let self, self.generation == attempt, self.state == .connected,
+                        self.profile.clipboard, self.isSelected
+                    else { return }
+                    self.clipboardBridge.receive(batch: batch)
+                }
+            }
+            client.onClipboardProgress = { [weak self] message in
+                DispatchQueue.main.async {
+                    guard let self, self.generation == attempt, self.state == .connected,
+                        self.profile.clipboard, self.isSelected
+                    else { return }
+                    self.clipboardMessage = message
                 }
             }
             desktop.sendKey = { [weak client] code, down, extended in
@@ -325,7 +370,7 @@ import SwiftTerm
     private func startClipboardTimer() {
         guard profile.kind == .rdp, profile.clipboard else { return }
         stopClipboard()
-        clipboardChange = -1
+        clipboardBridge.reset()
         clipboardTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.syncClipboard()
@@ -334,14 +379,14 @@ import SwiftTerm
     }
     private func syncClipboard() {
         guard profile.clipboard, isSelected, state == .connected else { return }
-        let pasteboard = NSPasteboard.general
-        guard pasteboard.changeCount != clipboardChange else { return }
-        clipboardChange = pasteboard.changeCount
-        rdp?.setClipboardText(pasteboard.string(forType: .string) ?? "")
+        clipboardBridge.synchronize(
+            text: { rdp?.setClipboardText($0) }, files: { rdp?.setClipboardFiles($0) })
     }
     private func stopClipboard() {
         clipboardTimer?.invalidate()
         clipboardTimer = nil
+        clipboardBridge.invalidate()
+        clipboardMessage = ""
     }
     func controlAltDelete() { if state == .connected { rdp?.sendControlAltDelete() } }
     func focus() {

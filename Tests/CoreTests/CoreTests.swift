@@ -29,6 +29,20 @@ final class CoreTests: XCTestCase {
         profile.host = "2001:db8::1"
         XCTAssertNil(profile.validationMessage)
     }
+    func testRedirectedFolderValidation() {
+        var draft = ConnectionDraft()
+        draft.host = "synthetic.example"
+        draft.username = "fixture"
+        draft.kind = .rdp
+        draft.redirectedFolders = [RDPFolderExport(name: "Documents", bookmark: Data([1]))]
+        XCTAssertNil(draft.validationMessage)
+        draft.redirectedFolders.append(RDPFolderExport(name: "documents", bookmark: Data([2])))
+        XCTAssertNotNil(draft.validationMessage)
+        draft.redirectedFolders = [RDPFolderExport(name: "../escape", bookmark: Data([1]))]
+        XCTAssertNotNil(draft.validationMessage)
+        draft.redirectedFolders = [RDPFolderExport(name: "Files", bookmark: Data())]
+        XCTAssertNotNil(draft.validationMessage)
+    }
     func testEndpointTrustIsSeparatedByProtocolAndPort() {
         var ssh = ConnectionDraft()
         ssh.host = "SERVER.EXAMPLE"
@@ -59,6 +73,7 @@ final class CoreTests: XCTestCase {
         draft.folderID = folder.id
         draft.kind = .rdp
         draft.port = 3389
+        draft.redirectedFolders = [RDPFolderExport(name: "Mac files", bookmark: Data([1, 2, 3]), readOnly: false)]
         draft.clipboard = true
         draft.audioPlayback = false
         draft.dynamicResolution = false
@@ -72,6 +87,12 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(profiles[0].folderID, folder.id)
         let restored = ConnectionDraft(profiles[0])
         XCTAssertEqual(restored.kind, .rdp)
+        XCTAssertEqual(restored.redirectedFolders, draft.redirectedFolders)
+        profiles[0].rdpFolderExports = Data([0, 255])
+        let damaged = ConnectionDraft(profiles[0])
+        XCTAssertTrue(damaged.redirectedFoldersUnavailable)
+        XCTAssertNotNil(damaged.validationMessage)
+        profiles[0].rdpFolderExports = try JSONEncoder().encode(draft.redirectedFolders)
         XCTAssertTrue(restored.clipboard)
         XCTAssertFalse(restored.audioPlayback)
         XCTAssertFalse(restored.dynamicResolution)

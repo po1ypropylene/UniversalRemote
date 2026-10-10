@@ -168,11 +168,42 @@ struct ConnectionEditor: View {
     private var advanced: some View {
         Group {
             if draft.kind == .rdp {
+                Section("Redirect local folders") {
+                    if draft.redirectedFoldersUnavailable {
+                        Button("Reset unavailable folder settings") {
+                            draft.redirectedFolders = []
+                            draft.redirectedFoldersUnavailable = false
+                        }
+                    }
+                    ForEach($draft.redirectedFolders) { $folder in
+                        VStack(alignment: .leading, spacing: 8) {
+                            TextField("Drive name", text: $folder.name)
+                            Text(RDPFolderPicker.displayPath(for: folder))
+                                .font(.callout).foregroundStyle(.secondary).lineLimit(2)
+                                .accessibilityLabel("Local folder: \(RDPFolderPicker.displayPath(for: folder))")
+                            Toggle("Read-only", isOn: $folder.readOnly)
+                            HStack {
+                                Button("Choose another folder…") { chooseRedirectedFolder(replacing: folder.id) }
+                                    .accessibilityLabel("Choose another local folder for \(folder.name)")
+                                Spacer()
+                                Button("Remove") { draft.redirectedFolders.removeAll { $0.id == folder.id } }
+                                    .accessibilityLabel("Remove redirected folder \(folder.name)")
+                            }
+                        }
+                    }
+                    Button("Add local folders…") { chooseRedirectedFolder(replacing: nil) }
+                        .disabled(draft.redirectedFolders.count >= 16)
+                    Text(
+                        verbatim:
+                            "Selected folders appear in Windows under This PC and \\\\tsclient\\DriveName. Turning off Read-only lets the server create, change and delete their contents. Changes apply when you reconnect."
+                    )
+                    .font(.callout).foregroundStyle(.secondary)
+                }
                 Section("Sharing") {
-                    Toggle("Share text clipboard", isOn: $draft.clipboard)
+                    Toggle("Share text and files clipboard", isOn: $draft.clipboard)
                     Toggle("Play remote sound on this Mac", isOn: $draft.audioPlayback)
                     Text(
-                        "Enable clipboard sharing to copy text between this Mac and the selected desktop. Use ⌘C and ⌘V, or Windows Control+C and Control+V. Changes apply when you reconnect."
+                        "Enable clipboard sharing to copy text, files and folders between this Mac and the selected desktop. Remote files download before they are ready to paste in Finder. Use ⌘C and ⌘V, or Windows Control+C and Control+V. Changes apply when you reconnect."
                     ).font(.callout).foregroundStyle(.secondary)
                 }
             }
@@ -182,6 +213,17 @@ struct ConnectionEditor: View {
                 Button("Forget trusted identity for this server") { workspace.trust.forget(draft.endpointKey) }
             }
         }
+    }
+    private func chooseRedirectedFolder(replacing id: UUID?) {
+        do {
+            let folders = try RDPFolderPicker.pick()
+            if let id, let first = folders.first, let index = draft.redirectedFolders.firstIndex(where: { $0.id == id })
+            {
+                draft.redirectedFolders[index].bookmark = first.bookmark
+            } else {
+                draft.redirectedFolders.append(contentsOf: folders)
+            }
+        } catch { self.error = "Folder access could not be saved. Choose the folder again." }
     }
     private func importKey() {
         do {

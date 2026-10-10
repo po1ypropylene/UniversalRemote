@@ -9,15 +9,16 @@ if [[ ! -d "$fixture_source" ]]; then cp -R .dependencies/sources/FreeRDP "$fixt
 git -C .dependencies/sources/FreeRDP show HEAD:server/Sample/sfreerdp.c > "$fixture_source/server/Sample/sfreerdp.c"
 git -C .dependencies/sources/FreeRDP show HEAD:server/Sample/sfreerdp.h > "$fixture_source/server/Sample/sfreerdp.h"
 cp Tests/Integration/RDP/clipboard_fixture.h "$fixture_source/server/Sample/ur_clipboard_fixture.h"
+cp Tests/Integration/RDP/drive_fixture.h "$fixture_source/server/Sample/ur_drive_fixture.h"
 python3 - "$fixture_source/server/Sample/sfreerdp.c" <<'PY'
 from pathlib import Path
 import sys
 path = Path(sys.argv[1]); text = path.read_text()
 header = path.with_suffix('.h')
-header.write_text(header.read_text().replace('RdpsndServerContext* rdpsnd;', 'RdpsndServerContext* rdpsnd;\n    struct s_cliprdr_server_context* ur_clipboard;'))
-text = text.replace('struct server_info', '#include "ur_clipboard_fixture.h"\n\nstruct server_info', 1)
-text = text.replace('rdpsnd_server_context_free(context->rdpsnd);', 'ur_fixture_clipboard_stop(context);\n        rdpsnd_server_context_free(context->rdpsnd);')
-text = text.replace('/* Dynamic Virtual Channels */', 'if (!ur_fixture_clipboard_start(context)) return FALSE;\n\n    /* Dynamic Virtual Channels */')
+header.write_text(header.read_text().replace('RdpsndServerContext* rdpsnd;', 'RdpsndServerContext* rdpsnd;\n    struct s_cliprdr_server_context* ur_clipboard;\n    struct s_rdpdr_server_context* ur_drive;'))
+text = text.replace('struct server_info', '#include "ur_clipboard_fixture.h"\n#include "ur_drive_fixture.h"\n\nstruct server_info', 1)
+text = text.replace('rdpsnd_server_context_free(context->rdpsnd);', 'ur_fixture_drive_stop(context);\n        ur_fixture_clipboard_stop(context);\n        rdpsnd_server_context_free(context->rdpsnd);')
+text = text.replace('/* Dynamic Virtual Channels */', 'if (!ur_fixture_clipboard_start(context)) return FALSE;\n    if (!ur_fixture_drive_start(context)) return FALSE;\n\n    /* Dynamic Virtual Channels */')
 text = text.replace('instance->Open(instance, nullptr, (UINT16)port)', 'instance->Open(instance, "127.0.0.1", (UINT16)port)')
 text = text.replace('freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, FALSE)', 'freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, getenv("UNIVERSALREMOTE_FIXTURE_NLA") != nullptr)')
 text = text.replace('client->PostConnect = tf_peer_post_connect;', '''if (getenv("UNIVERSALREMOTE_FIXTURE_SAM"))
@@ -25,6 +26,19 @@ text = text.replace('client->PostConnect = tf_peer_post_connect;', '''if (getenv
     client->PostConnect = tf_peer_post_connect;''')
 path.write_text(text)
 PY
+# Correct a fixture-only server decoder that incorrectly expects file bytes after
+# the MS-RDPEFS write completion's count/padding. Production libraries are untouched.
+git -C .dependencies/sources/FreeRDP show HEAD:channels/rdpdr/server/rdpdr_main.c > "$fixture_source/channels/rdpdr/server/rdpdr_main.c"
+python3 - "$fixture_source/channels/rdpdr/server/rdpdr_main.c" <<'PYFIX'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]); s=p.read_text()
+a=s.index('static UINT rdpdr_server_drive_write_file_callback(')
+b=s.index('static UINT rdpdr_server_drive_write_file(',a)
+part=s[a:b]
+part=part.replace('\tif (!Stream_CheckAndLogRequiredLengthWLog(priv->log, s, length))\n\t\treturn ERROR_INVALID_DATA;\n','')
+s=s[:a]+part+s[b:]; p.write_text(s)
+PYFIX
 cmake -S "$fixture_source" -B .dependencies/rdp-fixture/build -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=27.0 -DBUILD_SHARED_LIBS=ON -DWITH_CLIENT=OFF \
   -DWITH_CLIENT_COMMON=ON -DWITH_SERVER=ON -DWITH_SHADOW=OFF -DWITH_PROXY=OFF \

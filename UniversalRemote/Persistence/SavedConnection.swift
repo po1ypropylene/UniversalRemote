@@ -20,6 +20,7 @@ import SwiftData
     var rdpDisplayMode: String? = nil
     var dynamicResolution: Bool
     var clipboard: Bool
+    var rdpFolderExports: Data? = nil
     var wireGuardID: UUID? = nil
     var audioPlayback: Bool = true
     var lastConnected: Date?
@@ -43,6 +44,7 @@ import SwiftData
         rdpDisplayMode = draft.displayMode.rawValue
         dynamicResolution = draft.dynamicResolution
         clipboard = draft.clipboard
+        rdpFolderExports = try? JSONEncoder().encode(draft.redirectedFolders)
         wireGuardID = draft.wireGuardID
         audioPlayback = draft.audioPlayback
         created = Date()
@@ -66,6 +68,7 @@ import SwiftData
         rdpDisplayMode = draft.displayMode.rawValue
         dynamicResolution = draft.dynamicResolution
         clipboard = draft.clipboard
+        rdpFolderExports = try? JSONEncoder().encode(draft.redirectedFolders)
         wireGuardID = draft.wireGuardID
         audioPlayback = draft.audioPlayback
     }

@@ -27,6 +27,15 @@ only the generated Release app before Xcode builds it, ensuring final app signin
 runs while preserving compiler/dependency caches. Reusing a sealed app while
 replacing dylibs can produce “a sealed resource is missing or invalid”.
 
+## Selected-folder access
+
+The parent retains user-selected read/write access and the app-scoped bookmark
+entitlement in `Configuration/UniversalRemote.entitlements`. Persistent RDP folder
+exports use these bookmarks; no broad filesystem or Full Disk Access entitlement
+is added. Xcode merges this file with generated sandbox/network entitlements.
+Final bundle verification checks both selected-file and bookmark rights.
+See Apple's [security-scoped access guidance](https://developer.apple.com/documentation/professional-video-applications/enabling-security-scoped-bookmark-and-url-access).
+
 ## Sandboxed WireGuard helper
 
 The child must be signed with exactly App Sandbox and sandbox-inherit entitlements.

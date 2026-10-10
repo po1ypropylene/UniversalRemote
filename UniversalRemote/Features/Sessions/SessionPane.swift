@@ -69,6 +69,11 @@ struct SessionPane: View {
                     }.padding(32).glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24)).padding(32)
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            if session.state == .connected, !session.clipboardMessage.isEmpty {
+                Text(session.clipboardMessage).font(.callout).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(10).background(.bar)
+                    .accessibilityLabel("File clipboard: \(session.clipboardMessage)")
+            }
             Divider()
             HStack(spacing: 9) {
                 Circle().fill(session.state.color).frame(width: 6, height: 6)

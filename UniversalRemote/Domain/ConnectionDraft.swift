@@ -19,6 +19,8 @@ struct ConnectionDraft: Identifiable {
     var displayMode = RDPDisplayMode.fit
     var dynamicResolution = true
     var clipboard = false
+    var redirectedFolders: [RDPFolderExport] = []
+    var redirectedFoldersUnavailable = false
     var wireGuardID: UUID?
     var audioPlayback = true
     init() {}
@@ -41,6 +43,11 @@ struct ConnectionDraft: Identifiable {
         displayMode = RDPDisplayMode(rawValue: saved.rdpDisplayMode ?? "") ?? .fit
         dynamicResolution = saved.dynamicResolution
         clipboard = saved.clipboard
+        if let data = saved.rdpFolderExports {
+            do { redirectedFolders = try JSONDecoder().decode([RDPFolderExport].self, from: data) } catch {
+                redirectedFoldersUnavailable = true
+            }
+        }
         wireGuardID = saved.wireGuardID
         audioPlayback = saved.audioPlayback
     }
@@ -57,6 +64,19 @@ struct ConnectionDraft: Identifiable {
         if username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Enter a username." }
         if !(200...8192).contains(desktopWidth) || !(200...8192).contains(desktopHeight) {
             return "Desktop dimensions must be between 200 and 8192 pixels."
+        }
+        if kind == .rdp {
+            if redirectedFoldersUnavailable {
+                return "Saved folder settings could not be read. Reset them and choose the folders again."
+            }
+            if redirectedFolders.count > 16 { return "Redirect at most 16 local folders per connection." }
+            var names = Set<String>()
+            for folder in redirectedFolders {
+                if let message = folder.validationMessage { return message }
+                if !names.insert(folder.name.precomposedStringWithCanonicalMapping.lowercased()).inserted {
+                    return "Give each redirected folder a different drive name."
+                }
+            }
         }
         return nil
     }

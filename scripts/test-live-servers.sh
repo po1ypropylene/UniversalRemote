@@ -10,7 +10,7 @@ xcrun clang -fobjc-arc -arch arm64 -mmacosx-version-min=27.0 \
   -I Vendor/Native/include/freerdp3 -I Vendor/Native/include/winpr3 \
   -L Vendor/Native/lib -Wl,-rpath,"$PWD/Vendor/Native/lib" \
   -framework Foundation -framework Security -lssh2 -lfreerdp3 -lfreerdp-client3 -lwinpr3 -lcrypto \
-  UniversalRemote/Native/SSH/SSHClient.m UniversalRemote/Native/RDP/RDPClient.m \
+  UniversalRemote/Native/SSH/SSHClient.m UniversalRemote/Native/RDP/RDPClient.m UniversalRemote/Native/RDP/RDPClipboard.m UniversalRemote/Native/RDP/RDPDrive.m \
   Tests/Integration/Live/live_servers.m -o "${UNIVERSALREMOTE_PROBE_CLIENT:-$fixture_root/client}"
 probe_options=()
 [[ "${UNIVERSALREMOTE_TEST_CONFIGURED:-0}" != 1 ]] || probe_options+=(--configured)

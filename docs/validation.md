@@ -189,6 +189,59 @@ read or changed. No commit or publication was performed.
   accessed. Disposable test processes/directories/logs were removed. No commit or
   publication occurred.
 
+## RDP file clipboard and selected folders — 10 October 2026
+
+- File clipboard initially advanced 1.3.0 to 1.4.0. This delivery advances 1.4.0
+  to 1.5.0 (build 1) for per-connection selected-folder redirection and compatible
+  clipboard improvements. Clipboard remains opt-in; drives have a separate list,
+  unique names, read-only defaults and explicit folder selection. No automatic
+  home/volume exports are enabled. App-scoped bookmarks persist permission, with
+  user-selected read/write and bookmark rights checked in the final signed bundle.
+- Clipboard streams complete batches into private temporary trees (700/600),
+  preserving last-write timestamps. AppKit file-URL providers own completed files
+  beyond session disconnect and fulfill without network waits. Partial transfers
+  cancel on deselection/disconnect; transfers copy without source deletion.
+  The limit is 8 GiB / 20,000 entries per batch. Completed files remain available
+  while the app is open and the pasteboard provider owns them; cleanup waits 60
+  seconds after ownership ends. App exit may leave OS temporary data pending system
+  cleanup. These files are not persistent storage.
+- Seventy-eight deterministic native clipboard and nine private-pasteboard checks
+  passed: nesting, Unicode/binary/empty files, locked snapshots, 64-bit offsets,
+  changed sources, invalid indexes/ranges, paths/links/aliases/conflicts, quotas,
+  replacement, cancellation and late replies. Provider checks preserve completed
+  URLs after bridge invalidation. Seven TLS and eight NLA RDP checks passed;
+  actual-channel batch callbacks verify timestamp preservation and byte equality
+  after disconnect, and drive peers verify writable open/write/read/close and
+  denied write opens followed by read-only reads with unchanged local bytes.
+- Fifty-five native drive checks passed, including 64-bit sparse reads/writes,
+  truncation, name/basic/standard/all metadata, pagination, share conflicts,
+  rename/delete, root/traversal/link refusal, malformed input, nonempty-directory
+  deletion denial, each read-only mutation path and cancellation without pending
+  deletion. The disposable server decoder was corrected to accept standard write
+  count/padding completions; production FreeRDP dependencies are unchanged.
+- Eighteen core tests and disposable SwiftData migration/reopening passed, preserving
+  existing profile/folder/settings identities and new bookmark metadata. Unreadable
+  saved metadata blocks connection until explicitly reset; unavailable/stale folder
+  access fails closed. Thirteen workspace, 18 SSH, 75 SFTP, 13 maintenance and ten
+  protected-probe synthetic checks passed. Race-enabled WireGuard tests, including
+  encrypted synthetic RDP accept/reject/clipboard exchange, also passed. Release/final bundle/platform/signature/
+  loader/sandboxed-helper checks passed. Existing dependency caches were reused.
+- An isolated native preview rendered the actual editor with in-memory SwiftData,
+  owned folder bookmarks, disposable preferences and credential loading disabled.
+  Folder path/name, read-only toggle, replacement/removal/addition buttons and the
+  reconnect explanation were visually inspected. The single scrolling form remains.
+  The UNC explanation uses verbatim text and actions identify their folder to
+  accessibility. Full VoiceOver, physical touch and an external-folder picker/
+  persistent grant across signed app relaunches were not exercised in this pass.
+- No real servers, protected local input, user database, Keychain or general clipboard
+  were accessed. Actual Finder paste, Windows Explorer drive mapping and production
+  Windows/xrdp policies still need user-flow verification. Directory notifications,
+  byte-range locks, ACL editing and arbitrary device controls are unsupported;
+  this is bounded folder access, not complete Windows filesystem emulation.
+  Configured formatting, shell syntax, repository hygiene and whitespace checks
+  passed. Disposable integration processes/data and preview tooling were removed;
+  dependency caches and the built app remain. No commit or publication occurred.
+
 ## Retained evidence
 
 Earlier isolated UI runs exercised the native workspace/editor, private-key/trust
@@ -220,7 +273,7 @@ Unicode/IME keyboard and real clipboard/audio were not established by that run.
   resizing could not apply. Software bitmap negotiation delivered visible frames;
   verify capability reporting, resolution negotiation, Retina coordinates/cursor shapes
   and behavior on Windows/xrdp/server policies. Match-window mode fixes its initial size.
-- **Input/sharing:** real clipboard both directions, audible remote sound, additional
+- **Input/sharing:** real text/file clipboard both directions, actual Finder paste, selected-folder drive interoperability, audible remote sound, additional
   keyboard layouts and Unicode/IME need verification. Synthetic clipboard exchange,
   keyboard events and silent local audio initialization are narrower evidence.
 - **SSH/SFTP:** broad real-server algorithms/key formats, full-screen terminal programs,

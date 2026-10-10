@@ -1,13 +1,19 @@
+#import "RDPClipboard.h"
 #import <Foundation/Foundation.h>
 NS_ASSUME_NONNULL_BEGIN
 @interface URRDPClient : NSObject
 // Set before connect; zero preserves the direct transport.
+@property(nonatomic, copy) NSArray<NSDictionary *> *redirectedFolders;
 @property(nonatomic) NSInteger tunnelPort;
 @property(nonatomic, copy, nullable) NSString *tunnelToken;
 @property(nonatomic, copy) void (^onStatus)(NSString *state, NSString *message);
 @property(nonatomic, copy) void (^onFrame)(NSData *pixels, NSInteger width, NSInteger height, NSInteger stride);
 @property(nonatomic, copy) BOOL (^onTrust)(NSString *fingerprint, NSString *details);
 @property(nonatomic, copy) void (^onClipboard)(NSString *text);
+@property(nonatomic, copy) void (^onClipboardBatch)(URRDPClipboardFileBatch *batch);
+@property(nonatomic, copy) void (^onClipboardFiles)(NSArray<NSURL *> *files);
+@property(nonatomic, copy) void (^onClipboardChange)(void);
+@property(nonatomic, copy) void (^onClipboardProgress)(NSString *message);
 @property(nonatomic, copy) void (^onCursor)
     (NSData *pixels, NSInteger width, NSInteger height, NSInteger hotX, NSInteger hotY);
 - (void)connectHost:(NSString *)host
@@ -25,6 +31,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)sendUnicode:(NSInteger)code pressed:(BOOL)pressed;
 - (void)sendPointerFlags:(NSInteger)flags x:(NSInteger)x y:(NSInteger)y;
 - (void)setClipboardText:(NSString *)text;
+- (void)setClipboardFiles:(NSArray<NSURL *> *)files;
+- (void)setClipboardActive:(BOOL)active;
 - (void)sendControlAltDelete;
 - (void)disconnect;
 // Asynchronous worker drain for app termination; never blocks the main thread.

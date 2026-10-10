@@ -120,9 +120,66 @@ and Option-scroll pan locally; ordinary scrolling reaches Windows.
 The worker retains clipboard updates before channel attachment and advertises after
 MonitorReady. The selected session synchronizes before paste and on its timer.
 Command+C/X/V/A map to Windows Control shortcuts after releasing forwarded Command;
-app shortcuts remain local. Text sharing is opt-in. FreeRDP's Mac audio backend is
+app shortcuts remain local. Text and file sharing are opt-in.
+The native clipboard adapter negotiates [MS-RDPECLIP](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpeclip/cbc851d3-4e68-45f4-9292-26872a9209f2) file streaming, relative file
+lists, locks and large-file ranges. Finder file URLs retain their security scopes;
+regular files and folders are traversed/read on the RDP worker with no-follow
+component opens, bounded entries/ranges and source identity/metadata checks.
+Locked local snapshots survive clipboard replacement until unlock (at most eight).
+Clipboard transfer is separate from folder redirection; source data must remain
+quiescent and transfers use copy semantics. Last-write timestamps accompany file
+descriptors and are restored after staging (directories last).
+
+Remote files stream in 256 KiB requests to private temporary trees (700/600), with
+an 8 GiB / 20,000-entry limit per batch and a 30-second no-progress timeout.
+Descriptor paths, collisions and file/directory conflicts are validated before
+creation; links, absolute/traversal paths and partial batches are rejected. Finder
+gets standard file URLs only after the entire batch completes. The main-actor
+pasteboard bridge preserves a newer local copy and suppresses remote-file echoes.
+AppKit file-URL data providers retain completed batches independently of the
+session. They fulfill from existing local paths without network waits. Selection
+changes/disconnect cancel partial downloads; completed clipboard files survive
+disconnect while the app and pasteboard provider remain alive. After ownership
+ends, cleanup waits 60 seconds for consumers already copying. App exit can leave
+OS temporary files pending system cleanup; this is not persistent file storage.
+Unidentified late format responses must drain before another request because that
+PDU carries no request ID; stream IDs reject late file responses. A silent peer may
+require reconnecting. Disk/codec work stays off the main actor, and the existing
+input/latest-frame pipeline remains unchanged.
+FreeRDP's Mac audio backend is
 bundled, playback defaults on, and microphone capture stays off. Changes apply after
 reconnect; real-server clipboard/audio policies still need broader verification.
+
+## RDP selected-folder redirection
+
+Per-connection exports store drive names, read-only flags and security-scoped
+bookmarks in optional `SavedConnection.rdpFolderExports` metadata. Existing entity
+and property identities remain intact; missing metadata means no exports. Unreadable
+metadata blocks connection until the user explicitly resets/reselects it. The folder
+picker grants access only to selected directories, and each native device retains
+its security scope until queued work and open handles retire. Stale/unresolvable
+bookmarks fail closed and require choosing the folder again.
+
+An independently implemented [MS-RDPEFS](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpefs/d8b2bc1c-0207-4c15-abe3-62eaa2afcaf1)
+backend supplies explicit filesystem devices through FreeRDP's addin interface.
+Automatic drive/home/hotplug exports are disabled. Core context initialization
+preserves the process-wide custom provider across concurrent connections; the
+common client constructor would replace it with the stock drive backend. Unicode
+full names travel in device data, with bounded ASCII fallback names. Each device
+has a serial worker and a pinned root directory descriptor. Checked relative paths,
+no-follow component opens and handle identity checks reject traversal, links and
+special files. Opens honor access/share modes; read-only denies every create,
+write, overwrite, truncate, rename, delete, attribute and mutating control request.
+Disconnect cancels work and does not execute pending delete-on-close operations.
+
+Supported requests cover create/open/close, 64-bit-offset reads/writes, directory
+pagination, basic/name/standard/all metadata, timestamps/attributes, rename,
+truncate, delete-on-close and volume information. Directory notifications, byte-range
+locking, security-descriptor updates and arbitrary device controls return unsupported;
+this is folder access, not a complete Windows filesystem emulation. Up to 16 named
+exports, 1,024 handles/device, 20,000 listing entries and 1 MiB I/O requests bound
+resource use. Windows policy may disable device redirection independently of
+clipboard sharing. Writable exports directly modify the selected Mac files.
 
 ## Shared SSH and SFTP
 
@@ -247,6 +304,6 @@ are required. See [development](development.md), [packaging](packaging.md) and
 
 Deferred: SCP/WebDAV, SFTP resume/Finder download promises, SSH
 config/agent/jump hosts/forwarding/certificates/hardware keys, RDP Gateway/RemoteApp/
-microphone/devices/drives/multiple monitors/hardware video, nested folders/cloud sync/
+microphone/other devices/multiple monitors/hardware video, nested folders/cloud sync/
 updater. The source license is undecided; synthetic passes do not establish production
 interoperability or distribution readiness.

@@ -278,6 +278,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = EHKBVESDE4;
 				ENABLE_APP_SANDBOX = YES;
+                CODE_SIGN_ENTITLEMENTS = Configuration/UniversalRemote.entitlements;
                 ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
                 ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
                 SWIFT_OBJC_BRIDGING_HEADER = "UniversalRemote/Native-Bridge.h";
@@ -320,6 +321,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = EHKBVESDE4;
 				ENABLE_APP_SANDBOX = YES;
+                CODE_SIGN_ENTITLEMENTS = Configuration/UniversalRemote.entitlements;
                 ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
                 ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
                 SWIFT_OBJC_BRIDGING_HEADER = "UniversalRemote/Native-Bridge.h";

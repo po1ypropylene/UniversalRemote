@@ -4,15 +4,18 @@ cd "$(dirname "$0")/.."
 source scripts/test-support.sh wireguard-migration
 python3 - "$fixture_root" <<'PY'
 from pathlib import Path
-import sys
+import sys, re
 out = Path(sys.argv[1])
 # Reconstruct the pre-feature models by removing optional tunnel/display selections.
 for name in ['Domain/ConnectionDraft.swift', 'Persistence/SavedConnection.swift']:
     source = Path('UniversalRemote') / name
-    text = ''.join(line for line in source.read_text().splitlines(True) if not any(field in line for field in ['wireGuardID', 'displayMode', 'rdpDisplayMode']))
+    text = source.read_text()
+    text = re.sub(r"        if let data = saved.rdpFolderExports \{.*?\n        \}", "", text, flags=re.S)
+    text = re.sub(r"        if kind == \.rdp \{.*?\n        \}", "", text, flags=re.S)
+    text = ''.join(line for line in text.splitlines(True) if not any(field in line for field in ['wireGuardID', 'displayMode', 'rdpDisplayMode', 'rdpFolderExports', 'redirectedFolders']))
     (out / source.name).write_text(text)
 PY
-common=(UniversalRemote/Domain/RDPDisplayMode.swift UniversalRemote/Domain/RemoteProtocol.swift UniversalRemote/Domain/SSHAuthentication.swift UniversalRemote/Persistence/ConnectionFolder.swift Tests/Integration/WireGuard/migration.swift)
+common=(UniversalRemote/Domain/RDPFolderExport.swift UniversalRemote/Domain/RDPDisplayMode.swift UniversalRemote/Domain/RemoteProtocol.swift UniversalRemote/Domain/SSHAuthentication.swift UniversalRemote/Persistence/ConnectionFolder.swift Tests/Integration/WireGuard/migration.swift)
 xcrun swiftc -parse-as-library -module-name UniversalRemote -target arm64-apple-macos27.0 -D BASELINE "${common[@]}" "$fixture_root/ConnectionDraft.swift" "$fixture_root/SavedConnection.swift" -o "$fixture_root/baseline"
 xcrun swiftc -parse-as-library -module-name UniversalRemote -target arm64-apple-macos27.0 "${common[@]}" UniversalRemote/Domain/ConnectionDraft.swift UniversalRemote/Persistence/SavedConnection.swift UniversalRemote/Persistence/SavedWireGuard.swift UniversalRemote/Domain/WireGuardConfiguration.swift -o "$fixture_root/current"
 "$fixture_root/baseline" "$fixture_root/library.store"

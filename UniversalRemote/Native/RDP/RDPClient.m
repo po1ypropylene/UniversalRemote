@@ -1,4 +1,6 @@
 #import "RDPClient.h"
+#import "RDPClipboard.h"
+#import "RDPDrive.h"
 #import <Security/Security.h>
 // CoreFoundation exports a different REFIID when Clang modules are enabled.
 #define REFIID WINPR_REFIID
@@ -34,8 +36,7 @@ typedef struct {
     void *owner;
     DispClientContext *display;
     CliprdrClientContext *clipboard;
-    BOOL clipboardReady;
-    NSString *__unsafe_unretained localText;
+    URRDPClipboard *__unsafe_unretained clipboardBridge;
     double lastFrame;
     pTCPConnect directTCPConnect;
     const char *identityHost;
@@ -50,6 +51,7 @@ typedef struct {
     NSMutableArray<NSDictionary *> *_events;
     freerdp *_instance;
     atomic_bool _stopped;
+    atomic_bool _clipboardActive;
 }
 @property(nonatomic, copy) NSString *tunnelFailure;
 - (void)runHost:(NSString *)host
@@ -209,77 +211,6 @@ static BOOL pointerNull(rdpContext *context) {
         client.onCursor([NSMutableData dataWithLength:4], 1, 1, 0, 0);
     return TRUE;
 }
-static UINT advertiseClipboard(CliprdrClientContext *clip) {
-    URContext *ctx = clip->custom;
-    if (!ctx->clipboardReady)
-        return CHANNEL_RC_OK;
-    CLIPRDR_FORMAT format = {.formatId = CF_UNICODETEXT, .formatName = NULL};
-    CLIPRDR_FORMAT_LIST list = {0};
-    list.numFormats = ctx->localText ? 1 : 0;
-    list.formats = &format;
-    return clip->ClientFormatList(clip, &list);
-}
-static UINT clipboardReady(CliprdrClientContext *clip, const CLIPRDR_MONITOR_READY *ready) {
-    CLIPRDR_GENERAL_CAPABILITY_SET general = {0};
-    general.capabilitySetType = CB_CAPSTYPE_GENERAL;
-    general.capabilitySetLength = 12;
-    general.version = CB_CAPS_VERSION_2;
-    general.generalFlags = CB_USE_LONG_FORMAT_NAMES;
-    CLIPRDR_CAPABILITIES caps = {0};
-    caps.cCapabilitiesSets = 1;
-    caps.capabilitySets = (CLIPRDR_CAPABILITY_SET *)&general;
-    UINT rc = clip->ClientCapabilities(clip, &caps);
-    if (rc)
-        return rc;
-    ((URContext *)clip->custom)->clipboardReady = YES;
-    return advertiseClipboard(clip);
-}
-static UINT clipboardFormats(CliprdrClientContext *clip, const CLIPRDR_FORMAT_LIST *list) {
-    CLIPRDR_FORMAT_LIST_RESPONSE response = {0};
-    response.common.msgFlags = CB_RESPONSE_OK;
-    UINT rc = clip->ClientFormatListResponse(clip, &response);
-    if (rc)
-        return rc;
-    for (UINT32 i = 0; i < list->numFormats; i++)
-        if (list->formats[i].formatId == CF_UNICODETEXT) {
-            CLIPRDR_FORMAT_DATA_REQUEST request = {0};
-            request.requestedFormatId = CF_UNICODETEXT;
-            return clip->ClientFormatDataRequest(clip, &request);
-        }
-    return CHANNEL_RC_OK;
-}
-static UINT clipboardRequest(CliprdrClientContext *clip, const CLIPRDR_FORMAT_DATA_REQUEST *request) {
-    URContext *ctx = clip->custom;
-    CLIPRDR_FORMAT_DATA_RESPONSE response = {0};
-    if (request->requestedFormatId == CF_UNICODETEXT && ctx->localText) {
-        NSMutableData *data = [[ctx->localText dataUsingEncoding:NSUTF16LittleEndianStringEncoding] mutableCopy];
-        uint16_t zero = 0;
-        [data appendBytes:&zero length:2];
-        response.common.msgFlags = CB_RESPONSE_OK;
-        response.common.dataLen = (UINT32)data.length;
-        response.requestedFormatData = data.bytes;
-        return clip->ClientFormatDataResponse(clip, &response);
-    }
-    response.common.msgFlags = CB_RESPONSE_FAIL;
-    return clip->ClientFormatDataResponse(clip, &response);
-}
-static UINT clipboardResponse(CliprdrClientContext *clip, const CLIPRDR_FORMAT_DATA_RESPONSE *response) {
-    if (!(response->common.msgFlags & CB_RESPONSE_OK) || response->common.dataLen > 1024 * 1024 ||
-        response->common.dataLen % 2)
-        return CHANNEL_RC_OK;
-    NSString *text = [[NSString alloc] initWithBytes:response->requestedFormatData
-                                              length:response->common.dataLen
-                                            encoding:NSUTF16LittleEndianStringEncoding];
-    if (text) {
-        NSRange nul = [text rangeOfString:[NSString stringWithCharacters:(unichar[]){0} length:1]];
-        if (nul.location != NSNotFound)
-            text = [text substringToIndex:nul.location];
-        URRDPClient *client = owner((rdpContext *)clip->custom);
-        if (client.onClipboard)
-            client.onClipboard(text);
-    }
-    return CHANNEL_RC_OK;
-}
 static void channelConnected(void *context, const ChannelConnectedEventArgs *event) {
     URContext *ctx = context;
     if (!strcmp(event->name, "rdpgfx"))
@@ -288,11 +219,7 @@ static void channelConnected(void *context, const ChannelConnectedEventArgs *eve
         ctx->display = event->pInterface;
     else if (!strcmp(event->name, "cliprdr")) {
         ctx->clipboard = event->pInterface;
-        ctx->clipboard->custom = ctx;
-        ctx->clipboard->MonitorReady = clipboardReady;
-        ctx->clipboard->ServerFormatList = clipboardFormats;
-        ctx->clipboard->ServerFormatDataRequest = clipboardRequest;
-        ctx->clipboard->ServerFormatDataResponse = clipboardResponse;
+        [ctx->clipboardBridge attach:ctx->clipboard];
     }
 }
 static void channelDisconnected(void *context, const ChannelDisconnectedEventArgs *event) {
@@ -303,7 +230,7 @@ static void channelDisconnected(void *context, const ChannelDisconnectedEventArg
         ctx->display = NULL;
     else if (!strcmp(event->name, "cliprdr")) {
         ctx->clipboard = NULL;
-        ctx->clipboardReady = NO;
+        [ctx->clipboardBridge detach];
     }
 }
 static BOOL preConnect(freerdp *instance) {
@@ -405,6 +332,7 @@ static BOOL authenticate(freerdp *instance, char **user, char **password, char *
     return FALSE;
 }
 static BOOL clientNew(freerdp *instance, rdpContext *context) {
+    instance->LoadChannels = freerdp_client_load_channels;
     instance->PreConnect = preConnect;
     instance->PostConnect = postConnect;
     instance->PostDisconnect = postDisconnect;
@@ -412,8 +340,14 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
     instance->AuthenticateEx = authenticate;
     return TRUE;
 }
+static void destroyContext(rdpContext *context) {
+    freerdp *instance = context->instance;
+    freerdp_context_free(instance);
+    freerdp_free(instance);
+}
 @implementation URRDPClient {
-    NSString *_clipboardText;
+    URRDPClipboard *_clipboardBridge;
+    URRDPDriveManager *_driveManager;
 }
 + (void)whenAllDisconnected:(void (^)(void))completion {
     dispatch_group_notify(workers(), dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), completion);
@@ -423,6 +357,7 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
         _lock = [NSLock new];
         _events = [NSMutableArray new];
         atomic_init(&_stopped, false);
+        atomic_init(&_clipboardActive, true);
     }
     return self;
 }
@@ -469,21 +404,53 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
     audioPlayback:(BOOL)audioPlayback {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-      freerdp_register_addin_provider(freerdp_channels_load_static_addin_entry, 0);
+      [URRDPDriveManager registerProvider];
       WLog_SetLogLevel(WLog_GetRoot(), WLOG_ERROR);
     });
     [self status:@"connecting" message:@"Connecting to remote desktop…"];
-    RDP_CLIENT_ENTRY_POINTS ep = {0};
-    ep.Size = sizeof(ep);
-    ep.Version = RDP_CLIENT_INTERFACE_VERSION;
-    ep.ContextSize = sizeof(URContext);
-    ep.ClientNew = clientNew;
-    rdpContext *context = freerdp_client_context_new(&ep);
+    // The common client constructor resets the process-wide addin provider on
+    // every session. Use the core context API so concurrent sessions keep the
+    // selected-folder provider installed throughout device negotiation.
+    freerdp *instance = freerdp_new();
+    rdpContext *context = NULL;
+    if (instance) {
+        instance->ContextSize = sizeof(URContext);
+        instance->ContextNew = clientNew;
+        if (freerdp_context_new(instance))
+            context = instance->context;
+        else
+            freerdp_free(instance);
+    }
     if (!context) {
         [self status:@"failed" message:@"Could not initialize RDP."];
         return;
     }
     ((URContext *)context)->owner = (__bridge void *)self;
+    _clipboardBridge = [URRDPClipboard new];
+    [_clipboardBridge setActive:atomic_load(&_clipboardActive)];
+    ((URContext *)context)->clipboardBridge = _clipboardBridge;
+    __weak URRDPClient *weakSelf = self;
+    _clipboardBridge.onText = ^(NSString *text) {
+      if (weakSelf.onClipboard)
+          weakSelf.onClipboard(text);
+    };
+    if (self.onClipboardBatch)
+        _clipboardBridge.onBatch = ^(URRDPClipboardFileBatch *batch) {
+          if (weakSelf.onClipboardBatch)
+              weakSelf.onClipboardBatch(batch);
+        };
+    _clipboardBridge.onFiles = ^(NSArray<NSURL *> *files) {
+      if (weakSelf.onClipboardFiles)
+          weakSelf.onClipboardFiles(files);
+    };
+    _clipboardBridge.onRemoteChange = ^{
+      if (weakSelf.onClipboardChange)
+          weakSelf.onClipboardChange();
+    };
+    _clipboardBridge.onProgress = ^(NSString *message) {
+      if (weakSelf.onClipboardProgress)
+          weakSelf.onClipboardProgress(message);
+    };
     rdpSettings *s = context->settings;
     if (self.tunnelPort > 0) {
         URContext *ctx = (URContext *)context;
@@ -493,7 +460,7 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
         ctx->directTCPConnect = callbacks.TCPConnect;
         callbacks.TCPConnect = tunnelTCPConnect;
         if (!freerdp_set_io_callbacks(context, &callbacks)) {
-            freerdp_client_context_free(context);
+            destroyContext(context);
             [self status:@"failed" message:@"Could not initialize the WireGuard RDP transport."];
             return;
         }
@@ -529,6 +496,15 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
     freerdp_settings_set_bool(s, FreeRDP_ExternalCertificateManagement, TRUE);
     freerdp_settings_set_bool(s, FreeRDP_IgnoreCertificate, FALSE);
     freerdp_settings_set_bool(s, FreeRDP_CertificateCallbackPreferPEM, TRUE);
+    _driveManager = [URRDPDriveManager new];
+    if (![_driveManager configure:self.redirectedFolders ?: @[] settings:s]) {
+        [_driveManager close];
+        _driveManager = nil;
+        destroyContext(context);
+        [self status:@"failed"
+             message:@"A redirected folder is unavailable. Edit the connection and choose the folder again."];
+        return;
+    }
     freerdp_settings_set_bool(s, FreeRDP_RedirectClipboard, clipboard);
     freerdp_settings_set_bool(s, FreeRDP_AudioPlayback, audioPlayback);
     freerdp_settings_set_bool(s, FreeRDP_RemoteConsoleAudio, FALSE);
@@ -558,6 +534,7 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
         while (!atomic_load(&_stopped) && !freerdp_shall_disconnect_context(context)) {
             @autoreleasepool {
                 [self drainEvents:(URContext *)context];
+                [_clipboardBridge tick];
                 HANDLE handles[64];
                 DWORD count = freerdp_get_event_handles(context, handles, 64);
                 if (!count || WaitForMultipleObjects(count, handles, FALSE, 16) == WAIT_FAILED ||
@@ -577,8 +554,14 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
     _instance = NULL;
     [_lock unlock];
     freerdp_disconnect(context->instance);
-    freerdp_client_context_free(context);
-    _clipboardText = nil;
+    destroyContext(context);
+    [_driveManager close];
+    _driveManager = nil;
+    [_clipboardBridge detach];
+    _clipboardBridge = nil;
+    [_lock lock];
+    [_events removeAllObjects];
+    [_lock unlock];
     if (failure)
         [self status:@"failed" message:failure];
     else
@@ -620,10 +603,11 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
             layout.DeviceScaleFactor = layout.DesktopScaleFactor >= 200 ? 180 : 100;
             ctx->display->SendMonitorLayout(ctx->display, 1, &layout);
         } else if ([type isEqualToString:@"clipboard"]) {
-            _clipboardText = event[@"text"];
-            ctx->localText = _clipboardText;
-            if (ctx->clipboard)
-                advertiseClipboard(ctx->clipboard);
+            [ctx->clipboardBridge setText:event[@"text"]];
+        } else if ([type isEqualToString:@"clipboardFiles"]) {
+            [ctx->clipboardBridge setFiles:event[@"files"]];
+        } else if ([type isEqualToString:@"clipboardActive"]) {
+            [ctx->clipboardBridge setActive:[event[@"active"] boolValue]];
         }
     }
 }
@@ -647,6 +631,13 @@ static BOOL clientNew(freerdp *instance, rdpContext *context) {
 - (void)setClipboardText:(NSString *)text {
     if (text.length <= 512 * 1024)
         [self enqueue:@{@"type" : @"clipboard", @"text" : text}];
+}
+- (void)setClipboardFiles:(NSArray<NSURL *> *)files {
+    [self enqueue:@{@"type" : @"clipboardFiles", @"files" : [files copy]}];
+}
+- (void)setClipboardActive:(BOOL)active {
+    atomic_store(&_clipboardActive, active);
+    [self enqueue:@{@"type" : @"clipboardActive", @"active" : @(active)}];
 }
 - (void)sendControlAltDelete {
     [self sendScanCode:0x1D pressed:YES extended:NO];
