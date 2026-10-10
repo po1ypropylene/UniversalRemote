@@ -18,13 +18,21 @@ This is an early preview. Local builds are ad-hoc signed and unnotarized.
 
 ![Universal Remote workspace and saved connections](docs/images/UniversalRemote-Home.png)
 
-| SSH terminal | SFTP file transfer |
-| --- | --- |
-| ![SSH terminal and connection tabs](docs/images/UniversalRemote-SSH.png) | ![Local and remote SFTP file panels](docs/images/UniversalRemote-SFTP.png) |
+**SSH terminal**
 
-| Remote desktop | Connection editor |
-| --- | --- |
-| ![RDP desktop session](docs/images/UniversalRemote-RDP.png) | ![Connection settings and WireGuard selection](docs/images/UniversalRemote-EditConnection.png) |
+![SSH terminal and connection tabs](docs/images/UniversalRemote-SSH.png)
+
+**SFTP file transfer**
+
+![Local and remote SFTP file panels](docs/images/UniversalRemote-SFTP.png)
+
+**Remote desktop**
+
+![RDP desktop session](docs/images/UniversalRemote-RDP.png)
+
+**Connection editor**
+
+![Connection settings and WireGuard selection](docs/images/UniversalRemote-EditConnection.png)
 
 ## Get started
 
